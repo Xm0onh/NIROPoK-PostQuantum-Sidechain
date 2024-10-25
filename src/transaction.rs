@@ -1,4 +1,5 @@
-
+use serde::{Deserialize, Serialize};
+use chrono::Utc;
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -10,7 +11,7 @@ pub enum TransactionType {
     DELEGATE,
     RESIGN,
     VALIDATOR,
-    VALIDATOR_REWARD,
+    ValidatorReward,
 }
 
 
@@ -33,7 +34,7 @@ impl Transaction {
         sender: String, 
         recipient: String, 
         amount: usize, 
-        timestamp: usize, 
+        timestamp: usize,
         fee: usize, 
         txn_type: TransactionType) -> Result<Self, String> {
         Ok(Self {
@@ -52,4 +53,3 @@ impl Transaction {
         Ok(true)
     }
 }
-

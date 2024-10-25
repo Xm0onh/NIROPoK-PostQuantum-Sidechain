@@ -1,11 +1,21 @@
 use crystals_dilithium::dilithium2::Keypair;
-use serde::{Deserialize, Serialize};
-use rand::rngs::OsRng;
+
+// use serde::{Deserialize, Serialize};
+// use rand::rngs::OsRng;
 
 
 pub struct Wallet {
-    pub public_key: Keypair::Public,
-    pub private_key: Keypair::Secret,
+    pub keypair: Keypair,
+}
+
+impl Wallet {
+    pub fn new() -> Result<Self, String> {
+        let seed = [0u8; 32]; // Define a seed with 32 bytes
+        let keypair = Keypair::generate(Some(&seed));
+        Ok(Self{
+            keypair,
+        })
+    }
 }
 
 
