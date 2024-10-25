@@ -1,0 +1,12 @@
+[package]
+name = "niropok-pq-sidechain"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4"
+serde = {version = "1.0", features =["derive"]}
+crystals-dilithium = "1.0.0"
+chrono = "0.4"
+rand = "0.8.5"
+hex = "0.4"
