@@ -27,6 +27,9 @@ pub struct Transaction {
     pub txn_type: TransactionType,
 }
 
+
+
+#[allow(dead_code)]
 impl Transaction {
     // TODO - sender/recipient should be Wallet struct
     // TODO - signature should be generated based on CRYSTAL-Dilithium
@@ -34,7 +37,7 @@ impl Transaction {
         sender: String, 
         recipient: String, 
         amount: usize, 
-        timestamp: usize,
+        _timestamp: usize,
         fee: usize, 
         txn_type: TransactionType) -> Result<Self, String> {
         Ok(Self {
