@@ -10,3 +10,6 @@ crystals-dilithium = "1.0.0"
 chrono = "0.4"
 rand = "0.8.5"
 hex = "0.4"
+libp2p = { version = "0.51", features = ["full", "tokio", "mdns"] }
+tokio = { version = "1.28", features = ["io-util", "io-std", "macros", "rt", "rt-multi-thread", "sync", "time"] }
+once_cell = "1.5"

@@ -1,6 +1,8 @@
 
 mod wallet;
 mod transaction;
+mod p2p;
+mod block;
 
 
 fn main() {
