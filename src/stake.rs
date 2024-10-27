@@ -1,4 +1,4 @@
-
+use std::collections::HashMap;
 
 pub struct Stake {
     pub accounts: Vec<String>,
@@ -7,18 +7,17 @@ pub struct Stake {
 
 impl Stake {
     pub fn new() -> Self {
-        // TODO - initialize with accounts from genesis
         Self {
             accounts: vec![],
             balances: HashMap::new(),
         }
     }
 
-    pub fn stake(&mut self, account: String, amount: f64) {
-        if !self.balances.contains_key(&account) {
-            self.balances.insert(account, 0.0);
+    pub fn stake(&mut self, account: &String, amount: f64) {
+        if !self.balances.contains_key(account) {
+            self.balances.insert(account.to_string(), 0.0);
         }
-        self.balances.entry(account).and_modify(|v| *v += amount);
+        self.balances.entry(account.to_string()).and_modify(|v| *v += amount);
     }
 
     pub fn unstake(&mut self, account: String, amount: f64) {
