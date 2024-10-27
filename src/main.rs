@@ -5,6 +5,7 @@ mod p2p;
 mod block;
 mod blockchain;
 mod mempool;
+mod account;
 
 
 fn main() {
