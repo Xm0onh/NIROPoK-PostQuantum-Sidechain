@@ -6,6 +6,7 @@ use crystals_dilithium::dilithium2::{Keypair, Signature};
 pub struct Wallet {
     pub keypair: Keypair,
 }
+
 #[allow(dead_code)]
 impl Wallet {
     pub fn new() -> Result<Self, String> {
