@@ -93,8 +93,10 @@ impl AppBehaviour {
     fn handle_floodsub_event(&mut self, event: FloodsubEvent, blockchain: Arc<Mutex<Blockchain>>) {
         if let FloodsubEvent::Message(message) = event {
             let mut blockchain = blockchain.lock().unwrap();
-            if let Ok(data) = serde_json::from_slice::<ChainResponse>(&message.data) {
-                if data.from_peer_id ==  PEER_ID.to_string() {
+
+            // Chain response
+            if let Ok(resp) = serde_json::from_slice::<ChainResponse>(&message.data) {
+                if resp.from_peer_id ==  PEER_ID.to_string() {
                     info!("Received chain from {:?}", message.source);
                     // blockchain.replace_chain(&data.blocks);
                     /*
@@ -105,10 +107,68 @@ impl AppBehaviour {
                     .collect();
                      */
                 }
+            } 
+            // Chain Request
+            else if let Ok(req) = serde_json::from_slice::<ChainRequest>(&message.data) {
+                info!("Received chain request from {:?}", message.source);
+                info!("Sending the chain and mempool to {:?}", message.source);
+                let peer_id = req.from_peer_id;
+                if peer_id == *PEER_ID {
+                    // TODO: send the chain and mempool
+                    // let json = serde_json::to_string(&ChainResponse{
+                    //     blocks: blockchain.chain.clone(),
+                    //     txns: blockchain.mempool.transactions.clone(),
+                    //     from_peer_id: PEER_ID.to_string(),
+                    // }).expect("Failed to serialize chain response");
+
+                    // self.floodsub.publish(CHAIN_TOPIC.clone(), json.as_bytes())
+                }
+            }
+            // Receive a new Transaction
+            else if let Ok(txn) = serde_json::from_slice::<Transaction>(&message.data) {
+                info!("Received a new transaction from {:?}", message.source);
+                // TODO: add the transaction to the mempool
+                /*
+                    if !blockchain.txn_exists(&txn.hash) && Transaction::verify(&txn).is_ok() {
+                        info!("Relaying the transaction to other peers");
+                        let json = serde_json::to_string(&txn).expect("Failed to serialize transaction");
+                        self.floodsub.publish(TRANSACTION_TOPIC.clone(), json.as_bytes());
+                        blockchain.mempool.add_transaction(txn);
+                    }
+                 */
+            }
+
+            // Receive a new Block
+            else if let Ok(block) = serde_json::from_slice::<Block>(&message.data) {
+                info!("Received a new block from {:?}", message.source);
+                // TODO: add the block to the chain
+
+                /*
+                    if blockchain.chain.last().unwrap().id < block.id && blockchain.is_valid_block(block.clone()) {
+                        info!("Relaying the block to other peers");
+                        let json = serde_json::to_string(&block).expect("Failed to serialize block");
+                        self.floodsub.publish(BLOCK_TOPIC.clone(), json.as_bytes());
+                    }
+                 */
             }
         }
     }
 
     fn handle_mdns_event(&mut self, event: MdnsEvent) {
+        match event {
+            MdnsEvent::Discovered(discovered_list) => {
+                for (peer_id, addr) in discovered_list {
+                    self.floodsub.add_node_to_partial_view(peer_id);
+                    info!("Discovered new peer: {:?}, addr: {:?}", peer_id, addr);
+                }
+        }
+         MdnsEvent::Expired(expired_list) => {
+            for (peer_id, addr) in expired_list {
+                self.floodsub.remove_node_from_partial_view(&peer_id);
+                info!("Expired peer: {:?}, addr: {:?}", peer_id, addr);
+            }
+         }
+    }
+
     }
 }
