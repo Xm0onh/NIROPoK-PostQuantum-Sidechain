@@ -41,6 +41,8 @@ impl Transaction {
         _timestamp: usize,
         fee: usize, 
         txn_type: TransactionType) -> Result<Self, String> {
+        // TODO - hash should be generated based on all fields -> Placeholder for now
+        // let hash = hash(&sender, &recipient, &amount, &fee, &txn_type);    
         Ok(Self {
                 // TODO - hash should be generated based on all fields
                 hash: String::new(),
