@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use chrono::Utc;
 
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TransactionType {
     TRANSACTION,
     COINBASE,
@@ -15,7 +15,7 @@ pub enum TransactionType {
 }
 
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     pub hash: String,
     pub sender: String,
