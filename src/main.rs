@@ -3,6 +3,7 @@ mod wallet;
 mod transaction;
 mod p2p;
 mod block;
+mod blockchain;
 
 
 fn main() {

@@ -3447,9 +3447,11 @@ dependencies = [
  "crystals-dilithium",
  "hex",
  "libp2p",
+ "log",
  "once_cell",
  "rand 0.8.5",
  "serde",
+ "serde_json",
  "tokio",
 ]
 
