@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use crystals_dilithium::dilithium2::{Signature, PublicKey};
-use crate::wallet::Wallet;
+use crystals_dilithium::dilithium2::PublicKey;
 use chrono::Utc;
+
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
