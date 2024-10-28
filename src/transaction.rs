@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
+use crystals_dilithium::dilithium2::PublicKey;
 use chrono::Utc;
+
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,28 +33,31 @@ pub struct Transaction {
 
 #[allow(dead_code)]
 impl Transaction {
-    // TODO - sender/recipient should be Wallet struct
-    // TODO - signature should be generated based on CRYSTAL-Dilithium
     pub fn new(
         sender: String, 
         recipient: String, 
+        signature: String,
         amount: usize, 
         _timestamp: usize,
         fee: usize, 
         txn_type: TransactionType) -> Result<Self, String> {
+        // TODO - hash should be generated based on all fields -> Placeholder for now
+        // let hash = hash(&sender, &recipient, &amount, &fee, &txn_type);    
         Ok(Self {
                 // TODO - hash should be generated based on all fields
                 hash: String::new(),
                 sender,
                 recipient,
-                signature: String::new(),
+                signature,
                 amount,
                 timestamp: Utc::now().timestamp_millis() as usize,
                 fee,
                 txn_type})
     }
-    // TODO - verify transaction
+
     pub fn verify(&self) -> Result<bool, String> {
-        Ok(true)
+        let msg = serde_json::to_string(&self).unwrap();
+        let public_key = PublicKey::from_bytes(&hex::decode(&self.sender).unwrap());
+        Ok(public_key.verify(&msg.as_bytes(), &self.signature.as_bytes()))
     }
 }
