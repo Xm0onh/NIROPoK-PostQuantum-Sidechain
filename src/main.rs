@@ -107,7 +107,9 @@ async fn main() {
                 println!("init event");
             }
             EventType::Mining => {
-                info!("mining event");
+                // info!("mining event");
+                let json = serde_json::to_string("Hi").unwrap();
+                swarm.behaviour_mut().floodsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes());
             }
         }
     }

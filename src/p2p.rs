@@ -151,6 +151,10 @@ impl AppBehaviour {
                     }
                  */
             }
+            // Simple string message
+            else if let Ok(msg) = serde_json::from_slice::<String>(&message.data) {
+                info!("Received a simple string message from {:?}: {:?}", message.source, msg);
+            }
         }
     }
 
