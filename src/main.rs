@@ -1,3 +1,4 @@
+use p2p::EventType;
 use tokio::{
     io::{stdin, AsyncBufReadExt, BufReader},
     select, spawn,
@@ -42,6 +43,8 @@ async fn main() {
 
     let mut swarm = SwarmBuilder::with_tokio_executor(transport, behavior, p2p::PEER_ID.clone()).build();
     
+    let mut stdin: tokio::io::Lines<BufReader<tokio::io::Stdin>> = BufReader::new(stdin()).lines();
+
     let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0"
     .parse()
     .expect("Failed to parse listen address");
@@ -62,24 +65,45 @@ async fn main() {
      /*
      
      */
+   
      loop {
-        // start listening for events
+      let evt =  {
        select! {
-       
+        line = stdin.next_line() => Some(p2p::EventType::Command(line.expect("can get line").expect("can read line from stdin"))),
+        _init = init_rcv.recv() => Some(p2p::EventType::Init),
         event = swarm.select_next_some() => {
             match event {
                 SwarmEvent::Behaviour(e) => {
                     let mut behaviour = swarm.behaviour_mut();
                     behaviour.handle_event(e, Arc::clone(&blockchain));
+                    None
                 }
                 SwarmEvent::NewListenAddr { address, .. } => {
                     info!("Listening on {:?}", address);
-                    
+                    None
                 }
-                _ => {}
+                _ => None
             }
         },
        }
+    };
+
+    if let Some(event) = evt {
+        match event {
+            EventType::Command(cmd) => {
+                // TODO: handle commands
+                info!("command: {:?}", cmd);
+            }
+
+            EventType::Init => {
+                info!("init event");
+                println!("init event");
+            }
+            EventType::Mining => {
+                info!("mining event");
+            }
+        }
+    }
 
 
      }
