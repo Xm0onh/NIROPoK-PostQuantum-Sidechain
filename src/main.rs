@@ -24,6 +24,8 @@ mod account;
 mod stake;
 mod validator;
 
+use blockchain::Blockchain;
+
 use log::info;
 #[tokio::main]
 async fn main() {
@@ -32,6 +34,8 @@ async fn main() {
     let (init_sender, mut init_rcv) = mpsc::unbounded_channel::<bool>();
 
     let wallet = wallet::Wallet::new().unwrap();
+    let blockchain = Arc::new(Mutex::new(Blockchain::new(wallet)));
+
 
     let behavior = p2p::AppBehaviour::new().await;
     let transport = libp2p::tokio_development_transport(p2p::KEYS.clone()).expect("Failed to create transport");
@@ -61,8 +65,13 @@ async fn main() {
      loop {
         // start listening for events
        select! {
+       
         event = swarm.select_next_some() => {
             match event {
+                SwarmEvent::Behaviour(e) => {
+                    let mut behaviour = swarm.behaviour_mut();
+                    behaviour.handle_event(e, Arc::clone(&blockchain));
+                }
                 SwarmEvent::NewListenAddr { address, .. } => {
                     info!("Listening on {:?}", address);
                     
