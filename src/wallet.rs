@@ -36,17 +36,6 @@ impl std::fmt::Debug for Wallet {
     }
 }
 
-// Implement Clone trait for Wallet
-impl Clone for Wallet {
-    fn clone(&self) -> Self {
-        Self {
-            // There is a risk of security here!
-            // Why do we need to clone the keypair?
-            keypair: Keypair::from_bytes(&self.keypair.to_bytes())
-        }
-    }
-}
-
 #[allow(dead_code)]
 impl Wallet {
     pub fn new() -> Result<Self, String> {
