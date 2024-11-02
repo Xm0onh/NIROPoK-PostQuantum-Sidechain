@@ -33,6 +33,7 @@ async fn main() {
     pretty_env_logger::init();
     info!("Starting the new Peer, {}", p2p::PEER_ID.clone());
     let (init_sender, mut init_rcv) = mpsc::unbounded_channel::<bool>();
+    let (mining_sender, mut mining_rcv) = mpsc::unbounded_channel::<bool>();
 
     let wallet = wallet::Wallet::new().unwrap();
     let blockchain = Arc::new(Mutex::new(Blockchain::new(wallet)));
@@ -65,12 +66,18 @@ async fn main() {
      /*
      
      */
+    let mining_sender_clone = mining_sender.clone();
+    planner.add(
+        move || mining_sender_clone.send(true).expect("can send mining event"),
+        periodic::Every::new(Duration::from_secs(1)),
+    );
    
      loop {
       let evt =  {
        select! {
         line = stdin.next_line() => Some(p2p::EventType::Command(line.expect("can get line").expect("can read line from stdin"))),
         _init = init_rcv.recv() => Some(p2p::EventType::Init),
+        _mining = mining_rcv.recv() => Some(p2p::EventType::Mining),
         event = swarm.select_next_some() => {
             match event {
                 SwarmEvent::Behaviour(e) => {
