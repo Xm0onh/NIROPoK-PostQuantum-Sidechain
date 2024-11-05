@@ -24,6 +24,8 @@ mod mempool;
 mod account;
 mod stake;
 mod validator;
+mod hashchain;
+mod constant;
 
 use blockchain::Blockchain;
 
@@ -62,10 +64,7 @@ async fn main() {
 
      let mut planner = periodic::Planner::new();
      planner.start();
-      //TODO  Run mining every second
-     /*
-     
-     */
+    
     let mining_sender_clone = mining_sender.clone();
     planner.add(
         move || mining_sender_clone.send(true).expect("can send mining event"),
