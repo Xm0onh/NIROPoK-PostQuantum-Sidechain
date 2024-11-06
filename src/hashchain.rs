@@ -1,6 +1,8 @@
 use sha3::{Digest, Sha3_256};
 use rand::Rng;
 use crate::constant::EPOCH_DURATION;
+use serde::{Serialize, Deserialize};
+#[derive(Debug,Serialize, Deserialize)]
 pub struct HashChain {
     pub hash_chain: Vec<String>
 }

@@ -28,6 +28,7 @@ mod hashchain;
 mod constant;
 
 use blockchain::Blockchain;
+use hashchain::HashChain;
 
 use log::info;
 #[tokio::main]
@@ -110,6 +111,12 @@ async fn main() {
                 let json = serde_json::to_string("Hi").unwrap();
                 swarm.behaviour_mut().floodsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes());
             }
+            EventType::HashChain => {
+                info!("hash chain event");
+                let hash_chain = HashChain::new();
+                let json = serde_json::to_string(&hash_chain).unwrap();
+                swarm.behaviour_mut().floodsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
+            }   
         }
     }
 

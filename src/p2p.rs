@@ -2,6 +2,7 @@
 use crate::transaction::Transaction;
 use crate::block::Block;
 use crate::blockchain::Blockchain;
+use crate::hashchain::HashChain;
 
 use libp2p::{
     floodsub::{Floodsub, FloodsubEvent, Topic},
@@ -23,7 +24,7 @@ pub static PEER_ID: Lazy<PeerId> = Lazy::new(|| PeerId::from_public_key(&KEYS.pu
 pub static CHAIN_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("chains"));
 pub static BLOCK_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("blocks"));
 pub static TRANSACTION_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("transactions"));
-
+pub static HASH_CHAIN_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("hash_chains"));
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChainRequest {
     pub from_peer_id: PeerId,
@@ -40,7 +41,8 @@ pub struct ChainResponse {
 pub enum EventType {
     Command(String),
     Init,
-    Mining
+    Mining,
+    HashChain,
 }
 
 #[derive(NetworkBehaviour)]
@@ -150,6 +152,10 @@ impl AppBehaviour {
                         self.floodsub.publish(BLOCK_TOPIC.clone(), json.as_bytes());
                     }
                  */
+            }
+            // Hash chain message
+            else if let Ok(msg) = serde_json::from_slice::<HashChain>(&message.data) {
+                info!("Received a hash chain message from {:?}: {:?}", message.source, msg);
             }
             // Simple string message
             else if let Ok(msg) = serde_json::from_slice::<String>(&message.data) {
