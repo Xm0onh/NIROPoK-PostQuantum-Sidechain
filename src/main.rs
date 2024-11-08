@@ -25,17 +25,18 @@ mod account;
 mod stake;
 mod validator;
 mod hashchain;
-mod constant;
+mod config;
 
 use blockchain::Blockchain;
-use hashchain::HashChain;
+use hashchain::{HashChain, HashChainMessage};
+use config::*;
 
 use log::info;
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
     info!("Starting the new Peer, {}", p2p::PEER_ID.clone());
-    let (init_sender, mut init_rcv) = mpsc::unbounded_channel::<bool>();
+    let (epoch_sender, mut epoch_rcv) = mpsc::unbounded_channel::<bool>();
     let (mining_sender, mut mining_rcv) = mpsc::unbounded_channel::<bool>();
 
     let wallet = wallet::Wallet::new().unwrap();
@@ -56,11 +57,11 @@ async fn main() {
     swarm.listen_on(listen_addr).expect("Failed to listen on address");
     
      // Send an init event after 1 second
-     let init_sender_clone = init_sender.clone();
+     let epoch_sender_clone = epoch_sender.clone();
      spawn(async move {
-         sleep(Duration::from_secs(1)).await;
-         info!("sending init event");
-         init_sender_clone.send(true).expect("can send init event");
+         sleep(Duration::from_secs(EPOCH_DURATION)).await;
+         info!("sending epoch event");
+         epoch_sender_clone.send(true).expect("can send epoch event");
      });
 
      let mut planner = periodic::Planner::new();
@@ -76,7 +77,7 @@ async fn main() {
       let evt =  {
        select! {
         line = stdin.next_line() => Some(p2p::EventType::Command(line.expect("can get line").expect("can read line from stdin"))),
-        _init = init_rcv.recv() => Some(p2p::EventType::Init),
+        _epoch = epoch_rcv.recv() => Some(p2p::EventType::Epoch),
         _mining = mining_rcv.recv() => Some(p2p::EventType::Mining),
         event = swarm.select_next_some() => {
             match event {
@@ -102,14 +103,20 @@ async fn main() {
                 info!("command: {:?}", cmd);
             }
 
-            EventType::Init => {
-                info!("init event");
-                println!("init event");
+            EventType::Epoch => {
+                info!("epoch event");
+                println!("epoch event");
+                let hash_chain = HashChain::new();
+                let hash_chain_message = HashChainMessage {
+                    hash_chain_index: hash_chain.get_hash(EPOCH_DURATION as usize - 1),
+                };
+                let json = serde_json::to_string(&hash_chain_message).unwrap();
+                swarm.behaviour_mut().floodsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
             }
             EventType::Mining => {
                 // info!("mining event");
-                let json = serde_json::to_string("Hi").unwrap();
-                swarm.behaviour_mut().floodsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes());
+                // let json = serde_json::to_string("Hi").unwrap();
+                // swarm.behaviour_mut().floodsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes());
             }
             EventType::HashChain => {
                 info!("hash chain event");

@@ -2,7 +2,7 @@
 use crate::transaction::Transaction;
 use crate::block::Block;
 use crate::blockchain::Blockchain;
-use crate::hashchain::HashChain;
+use crate::hashchain::{HashChain, HashChainMessage};
 
 use libp2p::{
     floodsub::{Floodsub, FloodsubEvent, Topic},
@@ -40,7 +40,7 @@ pub struct ChainResponse {
 #[allow(dead_code)]
 pub enum EventType {
     Command(String),
-    Init,
+    Epoch,
     Mining,
     HashChain,
 }
@@ -82,6 +82,7 @@ impl AppBehaviour {
         behaviour.floodsub.subscribe(CHAIN_TOPIC.clone());
         behaviour.floodsub.subscribe(BLOCK_TOPIC.clone());
         behaviour.floodsub.subscribe(TRANSACTION_TOPIC.clone());
+        behaviour.floodsub.subscribe(HASH_CHAIN_TOPIC.clone());
         behaviour
     }
 
@@ -154,8 +155,9 @@ impl AppBehaviour {
                  */
             }
             // Hash chain message
-            else if let Ok(msg) = serde_json::from_slice::<HashChain>(&message.data) {
+            else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(&message.data) {
                 info!("Received a hash chain message from {:?}: {:?}", message.source, msg);
+
             }
             // Simple string message
             else if let Ok(msg) = serde_json::from_slice::<String>(&message.data) {
