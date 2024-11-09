@@ -51,29 +51,33 @@ pub struct Transaction {
 #[allow(dead_code)]
 impl Transaction {
     pub fn new(
-        self,
         sender_wallet: &mut Wallet,
         sender: String, 
         recipient: String, 
         amount: f64, 
-        _timestamp: usize,
         fee: usize, 
-        txn_type: TransactionType) -> Result<Self, String> {
-        Ok(Self {
-                hash: self.compute_hash(),
-                sender,
-                recipient,
-                signature: sender_wallet.sign_message(&self.hash),
-                amount,
-                timestamp: Utc::now().timestamp_millis() as usize,
-                fee,
-                txn_type})
+        txn_type: TransactionType
+    ) -> Result<Self, String> {
+        let timestamp = Utc::now().timestamp_millis() as usize;
+        let mut txn = Self {
+            hash: [0u8; 32],
+            sender,
+            recipient,
+            signature: sender_wallet.sign_message(&[0u8; 32]),
+            amount,
+            timestamp,
+            fee,
+            txn_type
+        };
+        txn.hash = txn.compute_hash();
+        txn.signature = sender_wallet.sign_message(&txn.hash);
+        Ok(txn)
     }
 
     pub fn verify(&self) -> Result<bool, String> {
-        let msg = serde_json::to_string(&self).unwrap();
+        let msg = &self.hash;
         let public_key = PublicKey::from_bytes(&hex::decode(&self.sender).unwrap());
-        Ok(public_key.verify(&msg.as_bytes(), &self.signature))
+        Ok(public_key.verify(msg, &self.signature))
     }
 
     pub fn compute_hash(&self) -> [u8; 32] {

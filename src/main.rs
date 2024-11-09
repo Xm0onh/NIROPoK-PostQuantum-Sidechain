@@ -30,7 +30,7 @@ mod config;
 use blockchain::Blockchain;
 use hashchain::{HashChain, HashChainMessage};
 use config::*;
-
+use transaction::{Transaction, TransactionType};
 use log::info;
 #[tokio::main]
 async fn main() {
@@ -41,7 +41,6 @@ async fn main() {
 
     let wallet = wallet::Wallet::new().unwrap();
     let blockchain = Arc::new(Mutex::new(Blockchain::new(wallet)));
-
 
     let behavior = p2p::AppBehaviour::new().await;
     let transport = libp2p::tokio_development_transport(p2p::KEYS.clone()).expect("Failed to create transport");
