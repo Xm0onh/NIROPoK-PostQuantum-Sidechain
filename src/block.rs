@@ -19,8 +19,8 @@ impl Block {
         serde_json::to_string(&self.hash).unwrap()
     }
 
-    pub fn verify_block(&self, preBlock: Block) -> Result<bool, String> {
-        let previous_block_hash = preBlock.get_block_hash_by_index();
+    pub fn verify_block(&self, prev_block: Block) -> Result<bool, String> {
+        let previous_block_hash = prev_block.get_block_hash_by_index();
         if previous_block_hash != self.previous_hash {
             return Err("Previous block hash does not match".to_string());
         }
