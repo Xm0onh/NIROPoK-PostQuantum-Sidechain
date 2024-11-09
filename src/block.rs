@@ -5,6 +5,7 @@ use sha3::{Digest, Sha3_256};
 
 
 #[derive(Clone)]
+#[allow(dead_code)]
 struct Sha3Hasher;
 
 impl Hasher for Sha3Hasher {
@@ -19,15 +20,21 @@ impl Hasher for Sha3Hasher {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
     pub id: usize,
-    pub hash: String,
-    pub previous_hash: String,
+    pub hash: [u8; 32],
+    pub previous_hash: [u8; 32],
     pub timestamp: usize,
     pub txn: Vec<Transaction>,
 }
 
 impl Block {
-    pub fn new(id: usize, previous_hash: String, timestamp: usize, txn: Vec<Transaction>) -> Self {
-        Self { id, hash: String::new(), previous_hash, timestamp, txn }
+    pub fn new(self, id: usize, previous_hash: [u8; 32], timestamp: usize, txn: Vec<Transaction>) -> Self {
+        Self { 
+            id,
+            hash: self.compute_merkle_root(),
+            previous_hash,
+            timestamp,
+            txn
+        }
     }
 
     fn compute_merkle_root(&self) -> [u8; 32] {
