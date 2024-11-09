@@ -130,7 +130,12 @@ impl AppBehaviour {
             // Receive a new Transaction
             else if let Ok(txn) = serde_json::from_slice::<Transaction>(&message.data) {
                 info!("Received a new transaction from {:?}", message.source);
-                
+                if txn.verify().unwrap() && !blockchain.mempool.txn_exists(&txn.hash) {
+                    blockchain.mempool.add_transaction(txn.clone());
+                    // relay the transaction to other peers
+                    let json = serde_json::to_string(&txn).expect("Failed to serialize transaction");
+                    self.floodsub.publish(TRANSACTION_TOPIC.clone(), json.as_bytes());
+                }
             }
 
             // Receive a new Block
