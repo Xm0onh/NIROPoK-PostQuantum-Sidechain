@@ -2,19 +2,19 @@
 use crate::transaction::Transaction;
 use crate::block::Block;
 use crate::blockchain::Blockchain;
-use crate::hashchain::{HashChain, HashChainMessage};
-use crate::validator::{Validator};
+use crate::hashchain::HashChainMessage;
+use crate::validator::Validator;
 use libp2p::{
     floodsub::{Floodsub, FloodsubEvent, Topic},
     identity,
     mdns::{tokio::Behaviour as Mdns, Event as MdnsEvent},
-    swarm::{Swarm, NetworkBehaviour},
+    swarm::{ NetworkBehaviour},
     PeerId,
 };
 use serde::{Serialize, Deserialize};
 use once_cell::sync::Lazy;
 use serde_json;
-use std::{collections::HashSet, sync::{Arc, Mutex}};
+use std::{sync::{Arc, Mutex}};
 use log::info;
 
 

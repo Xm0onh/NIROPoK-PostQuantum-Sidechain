@@ -22,8 +22,8 @@ impl Mempool {
         self.transactions.clone()
     }
 
-    pub fn txn_exists(&self, hash: &[u8]) -> bool {
-        self.transactions.iter().any(|t| t.hash == hex::encode(hash))
+    pub fn txn_exists(&self, hash: &[u8; 32]) -> bool {
+        self.transactions.iter().any(|t| t.hash == *hash)
     }
 
     pub fn clear(&mut self) {

@@ -1,9 +1,6 @@
 use crate::block::Block;
 use crate::mempool::Mempool;
 use crate::account::Account;
-use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
-use serde::{Serialize, Deserialize};
 use crate::wallet::Wallet;
 use crate::validator::Validator;
 use crate::transaction::Transaction;
@@ -45,6 +42,14 @@ impl Blockchain {
                 .and_modify(|v| *v += transaction.amount)
                 .or_insert(transaction.amount);
         }
+    }
+
+    fn verify_block(&mut self, block: Block) -> Result<bool, String> {
+        let previous_block = self.chain.last().unwrap();
+        if block.previous_hash != previous_block.hash {
+            return Err("Previous block hash does not match".to_string());
+        }
+        Ok(true)
     }
 
     fn execute_block(&mut self, block: Block) {

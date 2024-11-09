@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use crystals_dilithium::dilithium2::PublicKey;
+use sha3::{Digest, Sha3_256};
+
 use chrono::Utc;
 
 
@@ -19,7 +21,7 @@ pub enum TransactionType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
-    pub hash: String,
+    pub hash: [u8; 32],
     pub sender: String,
     pub recipient: String,
     pub signature: String,
@@ -45,7 +47,7 @@ impl Transaction {
         // let hash = hash(&sender, &recipient, &amount, &fee, &txn_type);    
         Ok(Self {
                 // TODO - hash should be generated based on all fields
-                hash: String::new(),
+                hash: [0; 32],
                 sender,
                 recipient,
                 signature,

@@ -1,5 +1,20 @@
 use crate::transaction::Transaction;
 use serde::{Serialize, Deserialize};
+use rs_merkle::{Hasher, MerkleTree};
+use sha3::{Digest, Sha3_256};
+
+
+#[derive(Clone)]
+struct Sha3Hasher;
+
+impl Hasher for Sha3Hasher {
+    type Hash = [u8; 32];
+    fn hash(data: &[u8]) -> [u8; 32] {
+        let mut hasher = Sha3_256::new();
+        hasher.update(data);
+        hasher.finalize().into()
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
@@ -15,19 +30,12 @@ impl Block {
         Self { id, hash: String::new(), previous_hash, timestamp, txn }
     }
 
-    pub fn get_block_hash_by_index(&self) -> String {
-        serde_json::to_string(&self.hash).unwrap()
-    }
-
-    pub fn verify_block(&self, prev_block: Block) -> Result<bool, String> {
-        let previous_block_hash = prev_block.get_block_hash_by_index();
-        if previous_block_hash != self.previous_hash {
-            return Err("Previous block hash does not match".to_string());
-        }
-        /*
-        - Verify the transactions
-        - Verify the proof of stake
-         */
-        Ok(true)
+    fn compute_merkle_root(&self) -> [u8; 32] {
+        let leaves: Vec<[u8; 32]> = self.txn
+        .iter()
+        .map(|tx| tx.hash.clone())
+        .collect();
+        let tree = MerkleTree::<Sha3Hasher>::from_leaves(&leaves);
+        tree.root().unwrap()
     }
 }
