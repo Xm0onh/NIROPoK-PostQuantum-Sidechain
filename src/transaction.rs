@@ -1,10 +1,26 @@
-use serde::{Deserialize, Serialize};
-use crystals_dilithium::dilithium2::PublicKey;
+use serde::{Deserialize, Serialize, Deserializer, Serializer};
+use crystals_dilithium::dilithium2::{PublicKey, Signature};
 use sha3::{Digest, Sha3_256};
-
+use crate::wallet::Wallet;
 use chrono::Utc;
 
+// Custom serialization for Signature
+fn serialize_signature<S>(signature: &Signature, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    // Serialize the signature bytes directly
+    serializer.serialize_bytes(signature.as_ref())
+}
 
+// Custom deserialization for Signature
+fn deserialize_signature<'de, D>(deserializer: D) -> Result<Signature, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let bytes: Vec<u8> = Vec::deserialize(deserializer)?;
+    Signature::try_from(bytes.as_slice()).map_err(serde::de::Error::custom)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TransactionType {
@@ -18,39 +34,36 @@ pub enum TransactionType {
     ValidatorReward,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     pub hash: [u8; 32],
     pub sender: String,
     pub recipient: String,
-    pub signature: String,
+    #[serde(serialize_with = "serialize_signature")]
+    #[serde(deserialize_with = "deserialize_signature")]
+    pub signature: Signature,
     pub amount: f64,
     pub timestamp: usize,
     pub fee: usize,
     pub txn_type: TransactionType,
 }
 
-
-
 #[allow(dead_code)]
 impl Transaction {
     pub fn new(
+        self,
+        sender_wallet: &mut Wallet,
         sender: String, 
         recipient: String, 
-        signature: String,
         amount: f64, 
         _timestamp: usize,
         fee: usize, 
         txn_type: TransactionType) -> Result<Self, String> {
-        // TODO - hash should be generated based on all fields -> Placeholder for now
-        // let hash = hash(&sender, &recipient, &amount, &fee, &txn_type);    
         Ok(Self {
-                // TODO - hash should be generated based on all fields
-                hash: [0; 32],
+                hash: self.compute_hash(),
                 sender,
                 recipient,
-                signature,
+                signature: sender_wallet.sign_message(&self.hash),
                 amount,
                 timestamp: Utc::now().timestamp_millis() as usize,
                 fee,
@@ -60,6 +73,18 @@ impl Transaction {
     pub fn verify(&self) -> Result<bool, String> {
         let msg = serde_json::to_string(&self).unwrap();
         let public_key = PublicKey::from_bytes(&hex::decode(&self.sender).unwrap());
-        Ok(public_key.verify(&msg.as_bytes(), &self.signature.as_bytes()))
+        Ok(public_key.verify(&msg.as_bytes(), &self.signature))
     }
+
+    pub fn compute_hash(&self) -> [u8; 32] {
+        let mut hasher = Sha3_256::new();
+        hasher.update(self.sender.as_bytes());
+        hasher.update(self.recipient.as_bytes());
+        hasher.update(self.amount.to_string().as_bytes());
+        hasher.update(self.timestamp.to_string().as_bytes());
+        hasher.update(self.fee.to_string().as_bytes());
+        hasher.update(serde_json::to_string(&self.txn_type).unwrap().as_bytes());
+        hasher.finalize().into()
+    }
+
 }

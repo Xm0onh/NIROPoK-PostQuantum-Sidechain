@@ -1,6 +1,5 @@
 use crystals_dilithium::dilithium2::{Keypair, Signature};
 use serde::{Deserialize, Serialize, Deserializer, Serializer};
-
 pub struct Wallet {
     pub keypair: Keypair,
 }
@@ -46,7 +45,7 @@ impl Wallet {
         })
     }
 
-    pub fn sign(&self, msg: &[u8]) -> Signature {
+    pub fn sign_message(&self, msg: &[u8]) -> Signature {
         self.keypair.sign(msg)
     }
 
