@@ -93,10 +93,14 @@ impl Blockchain {
     }
 
     pub fn execute_block(&mut self, block: Block) {
-        for txn in block.txn {
+        for txn in block.txn.clone() {
             if txn.verify().unwrap() {
                 self.handle_transaction(txn);
             }
+        }
+        self.chain.push(block.clone());
+        for txn in block.txn {
+            self.mempool.delete_transaction(txn);
         }
     }
 
