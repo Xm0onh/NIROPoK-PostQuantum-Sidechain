@@ -23,7 +23,7 @@ pub struct Transaction {
     pub sender: String,
     pub recipient: String,
     pub signature: String,
-    pub amount: usize,
+    pub amount: f64,
     pub timestamp: usize,
     pub fee: usize,
     pub txn_type: TransactionType,
@@ -37,7 +37,7 @@ impl Transaction {
         sender: String, 
         recipient: String, 
         signature: String,
-        amount: usize, 
+        amount: f64, 
         _timestamp: usize,
         fee: usize, 
         txn_type: TransactionType) -> Result<Self, String> {
