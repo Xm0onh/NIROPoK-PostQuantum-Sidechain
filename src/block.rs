@@ -27,14 +27,16 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(self, id: usize, previous_hash: [u8; 32], timestamp: usize, txn: Vec<Transaction>) -> Self {
-        Self { 
+    pub fn new(id: usize, previous_hash: [u8; 32], timestamp: usize, txn: Vec<Transaction>) -> Result<Self, String> {
+        let mut block = Self { 
             id,
-            hash: self.compute_merkle_root(),
+            hash: [0u8; 32],
             previous_hash,
             timestamp,
             txn
-        }
+        };
+        block.hash = block.compute_merkle_root();
+        Ok(block)
     }
 
     fn compute_merkle_root(&self) -> [u8; 32] {

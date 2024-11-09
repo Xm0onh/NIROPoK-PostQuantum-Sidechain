@@ -32,6 +32,9 @@ use hashchain::{HashChain, HashChainMessage};
 use config::*;
 use transaction::{Transaction, TransactionType};
 use log::info;
+
+
+
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
