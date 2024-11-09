@@ -135,16 +135,14 @@ impl AppBehaviour {
 
             // Receive a new Block
             else if let Ok(block) = serde_json::from_slice::<Block>(&message.data) {
-                info!("Received a new block from {:?}", message.source);
-                // TODO: add the block to the chain
+                info!("Received a block from {:?}", message.source);
+                if blockchain.verify_block(block.clone()).unwrap() && !blockchain.block_exists(block.clone()) {
+                    // relay the block to other peers
+                    let json = serde_json::to_string(&block).expect("Failed to serialize block");
+                    self.floodsub.publish(BLOCK_TOPIC.clone(), json.as_bytes());
 
-                /*
-                    if blockchain.chain.last().unwrap().id < block.id && blockchain.is_valid_block(block.clone()) {
-                        info!("Relaying the block to other peers");
-                        let json = serde_json::to_string(&block).expect("Failed to serialize block");
-                        self.floodsub.publish(BLOCK_TOPIC.clone(), json.as_bytes());
-                    }
-                 */
+                    blockchain.execute_block(block.clone());
+                }
             }
             // Hash chain message
             else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(&message.data) {

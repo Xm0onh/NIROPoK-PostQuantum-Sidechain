@@ -33,9 +33,6 @@ impl Blockchain {
         else if transaction.txn_type == TransactionType::STAKE {
             self.handle_stake(transaction);
         }
-        else if transaction.txn_type == TransactionType::UNSTAKE {
-            self.handle_unstake(transaction);
-        }
     }
 
     fn execute_transaction(&mut self, transaction: Transaction) {
@@ -61,7 +58,7 @@ impl Blockchain {
 
 
     fn handle_stake(&mut self, transaction: Transaction) {
-        
+
         let balance = self.accounts
             .iter_mut()
             .find(|a| a.accounts.contains(&transaction.sender))
@@ -82,29 +79,33 @@ impl Blockchain {
             }
         }
     }
-
-    fn handle_unstake(&mut self, transaction: Transaction) {}
+    // TODO
+    // fn handle_unstake(&mut self, transaction: Transaction) {}
     
 
-    fn verify_block(&mut self, block: Block) -> Result<bool, String> {
+    pub fn verify_block(&mut self, block: Block) -> Result<bool, String> {
         let previous_block = self.chain.last().unwrap();
         if block.previous_hash != previous_block.hash {
             return Err("Previous block hash does not match".to_string());
         }
+        // TODO - Verify the proposer
         Ok(true)
     }
 
-    fn execute_block(&mut self, block: Block) {
-    }
-
-
-
-    fn add_validator(&mut self, validator: Validator) {
-        self.validator = validator;
+    pub fn execute_block(&mut self, block: Block) {
+        for txn in block.txn {
+            if txn.verify().unwrap() {
+                self.handle_transaction(txn);
+            }
+        }
     }
 
     pub fn get_validator(&self) -> &Validator {
         &self.validator
+    }
+
+    pub fn block_exists(&self, block: Block) -> bool {
+        self.chain.iter().any(|b| b.id == block.id)
     }
 
 }
