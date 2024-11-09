@@ -3,7 +3,7 @@ use crate::transaction::Transaction;
 use crate::block::Block;
 use crate::blockchain::Blockchain;
 use crate::hashchain::{HashChain, HashChainMessage};
-
+use crate::validator::{Validator};
 use libp2p::{
     floodsub::{Floodsub, FloodsubEvent, Topic},
     identity,
@@ -157,7 +157,7 @@ impl AppBehaviour {
             // Hash chain message
             else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(&message.data) {
                 info!("Received a hash chain message from {:?}: {:?}", message.source, msg);
-
+                Validator::update_validator_com(&mut blockchain.validator, message.source.to_string(), msg);
             }
             // Simple string message
             else if let Ok(msg) = serde_json::from_slice::<String>(&message.data) {

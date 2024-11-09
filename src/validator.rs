@@ -1,10 +1,11 @@
-use crate::account::Account;
+
+use std::collections::HashMap;
+use crate::account::{self, Account};
 use crate::transaction::Transaction;
-use crate::hashchain::HashChain;
+use crate::hashchain::{HashChain, HashChainMessage};
 pub struct Validator {
     pub accounts: Vec<Account>,
-    // TODO: change to a circular linked list
-    pub hash_chain: Vec<HashChain>,
+    pub hash_chain_com: HashMap<String, HashChainMessage>,
 }
 pub const MIN_STAKE: f64 = 100.0;
 
@@ -12,7 +13,7 @@ impl Validator {
     pub fn new() -> Self {
         Self {
             accounts: vec![],
-            hash_chain: vec![HashChain::new()],
+            hash_chain_com: HashMap::new(),
         }
     }
 
@@ -27,5 +28,9 @@ impl Validator {
     pub fn remove_validator(&mut self, account: Account, txn: Transaction) -> Result<bool, String> {
         self.accounts.retain(|a| a != &account);
         Ok(true)
+    }
+
+    pub fn update_validator_com(&mut self, address: String, com: HashChainMessage) {
+        self.hash_chain_com.insert(address, com);
     }
 }
