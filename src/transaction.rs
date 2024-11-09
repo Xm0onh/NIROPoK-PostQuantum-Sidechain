@@ -22,7 +22,7 @@ where
     Signature::try_from(bytes.as_slice()).map_err(serde::de::Error::custom)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransactionType {
     TRANSACTION,
     COINBASE,
