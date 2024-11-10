@@ -3,6 +3,7 @@ use crystals_dilithium::dilithium2::{PublicKey, Signature};
 use sha3::{Digest, Sha3_256};
 use crate::wallet::Wallet;
 use chrono::Utc;
+use crate::accounts::Account;
 
 // Custom serialization for Signature
 fn serialize_signature<S>(signature: &Signature, serializer: S) -> Result<S::Ok, S::Error>
@@ -37,8 +38,8 @@ pub enum TransactionType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     pub hash: [u8; 32],
-    pub sender: String,
-    pub recipient: String,
+    pub sender: Account,
+    pub recipient: Account,
     #[serde(serialize_with = "serialize_signature")]
     #[serde(deserialize_with = "deserialize_signature")]
     pub signature: Signature,
@@ -52,8 +53,8 @@ pub struct Transaction {
 impl Transaction {
     pub fn new(
         sender_wallet: &mut Wallet,
-        sender: String, 
-        recipient: String, 
+        sender: Account, 
+        recipient: Account, 
         amount: f64, 
         fee: usize, 
         txn_type: TransactionType
@@ -76,14 +77,14 @@ impl Transaction {
 
     pub fn verify(&self) -> Result<bool, String> {
         let msg = &self.hash;
-        let public_key = PublicKey::from_bytes(&hex::decode(&self.sender).unwrap());
+        let public_key = PublicKey::from_bytes(&hex::decode(&self.sender.address).unwrap());
         Ok(public_key.verify(msg, &self.signature))
     }
 
     pub fn compute_hash(&self) -> [u8; 32] {
         let mut hasher = Sha3_256::new();
-        hasher.update(self.sender.as_bytes());
-        hasher.update(self.recipient.as_bytes());
+        hasher.update(self.sender.address.as_bytes());
+        hasher.update(self.recipient.address.as_bytes());
         hasher.update(self.amount.to_string().as_bytes());
         hasher.update(self.timestamp.to_string().as_bytes());
         hasher.update(self.fee.to_string().as_bytes());

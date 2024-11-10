@@ -1,16 +1,16 @@
 use crate::block::Block;
 use crate::mempool::Mempool;
-use crate::account::Account;
+use crate::accounts::{Account, State};
 use crate::wallet::Wallet;
 use crate::validator::Validator;
 use crate::transaction::{Transaction, TransactionType};
 use crate::config::STAKING_AMOUNT;
-
+use crate::utils::Seed;
 pub struct Blockchain {
     pub chain: Vec<Block>,
     pub mempool: Mempool,
     pub wallet: Wallet,
-    pub accounts: Vec<Account>,
+    pub state: State,
     pub validator: Validator,
 }
 
@@ -21,9 +21,14 @@ impl Blockchain {
             chain: vec![],
             mempool: Mempool::new(),
             wallet,
-            accounts: vec![],
+            state: State::new(),
             validator: Validator::new(),
         }
+    }
+
+    pub fn select_block_proposer(&self) -> String {
+        let mut lowest_weight = f64::INFINITY;
+        String::new()
     }
 
     fn handle_transaction(&mut self, transaction: Transaction) {
@@ -37,52 +42,18 @@ impl Blockchain {
 
     fn execute_transaction(&mut self, transaction: Transaction) {
         if transaction.verify().unwrap() {
-            self.accounts
-                .iter_mut()
-                .find(|a| a.accounts.contains(&transaction.sender))
-                .unwrap()
-                .balances.entry(transaction.sender.clone())
-                .and_modify(|v| *v += transaction.amount)
-                .or_insert(transaction.amount);
-
-
-            self.accounts
-                .iter_mut()
-                .find(|a| a.accounts.contains(&transaction.recipient))
-                .unwrap()
-                .balances.entry(transaction.recipient.clone())
-                .and_modify(|v| *v += transaction.amount)
-                .or_insert(transaction.amount);
+            self.state.transfer(transaction.sender.clone(), transaction.recipient.clone(), transaction.amount);
         }
     }
 
-
     fn handle_stake(&mut self, transaction: Transaction) {
-
-        let balance = self.accounts
-            .iter_mut()
-            .find(|a| a.accounts.contains(&transaction.sender))
-            .unwrap()
-            .balances.get(&transaction.sender).unwrap();
-
-        if *balance >= STAKING_AMOUNT  && transaction.amount >= STAKING_AMOUNT {
-            let sender_account = self.accounts
-                .iter_mut()
-                .find(|a| a.accounts.contains(&transaction.sender))
-                .unwrap();
-            
-            if self.validator.add_validator(sender_account.clone(), transaction.clone()).unwrap() {
-                sender_account.balances
-                    .entry(transaction.sender.clone())
-                    .and_modify(|v| *v -= STAKING_AMOUNT)
-                    .or_insert(0.0);
-            }
+        if transaction.verify().unwrap() {
+            self.validator.add_validator(transaction.sender.clone(), transaction.clone()).unwrap();
         }
     }
     // TODO
     // fn handle_unstake(&mut self, transaction: Transaction) {}
     
-
     pub fn verify_block(&mut self, block: Block) -> Result<bool, String> {
         let previous_block = self.chain.last().unwrap();
         if block.previous_hash != previous_block.hash {
@@ -91,7 +62,7 @@ impl Blockchain {
         // TODO - Verify the proposer
         Ok(true)
     }
-
+    
     pub fn execute_block(&mut self, block: Block) {
         for txn in block.txn.clone() {
             if txn.verify().unwrap() {
