@@ -22,7 +22,6 @@ mod block;
 mod blockchain;
 mod mempool;
 mod account;
-mod stake;
 mod validator;
 mod hashchain;
 mod config;
