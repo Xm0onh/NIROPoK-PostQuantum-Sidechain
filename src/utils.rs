@@ -1,6 +1,7 @@
 
 use crate::validator::Validator;
-
+use sha3::{Digest, Sha3_256};
+use crate::accounts::Account;
 #[derive(Debug, Clone, Copy)]
 pub struct Seed {
     pub seed: [u8; 32],
@@ -30,4 +31,26 @@ pub fn get_block_seed(proposer_hash: String, prev_seed: [u8; 32]) -> [u8; 32] {
     seed.try_into().unwrap()
 }
 
-// pub fn compute_validators_weight(seed: [u8; 32],  )
+pub fn select_block_proposer(seed: Seed, validator: &Validator) -> &Account {
+    let N: f64 = 1e9; // large constant
+    let mut weights = vec![0f64; validator.state.accounts.len()];
+    let mut proposer = &validator.state.accounts[0];
+    for (i, account) in validator.state.accounts.iter().enumerate() {
+        let mut hasher = Sha3_256::new();
+        hasher.update(seed.get_seed());
+        hasher.update(validator.hash_chain_com.get(&account.address).unwrap().hash_chain_index.as_bytes());
+        let hash_result = hasher.finalize();
+        let numeric_value = u64::from_be_bytes([hash_result[0], hash_result[1], hash_result[2], hash_result[3], hash_result[4], hash_result[5], hash_result[6], hash_result[7]]);
+        weights[i] = N - (numeric_value as f64 / validator.state.balances.get(&account).unwrap());
+    };
+
+    let mut lowest_weight = f64::INFINITY;
+    for (i, weight) in weights.iter().enumerate() {
+        if *weight < lowest_weight {
+            lowest_weight = *weight;
+            proposer = &validator.state.accounts[i];
+        }
+    }
+    proposer
+}
+

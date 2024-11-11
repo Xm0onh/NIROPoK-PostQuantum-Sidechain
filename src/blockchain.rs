@@ -4,8 +4,7 @@ use crate::accounts::{Account, State};
 use crate::wallet::Wallet;
 use crate::validator::Validator;
 use crate::transaction::{Transaction, TransactionType};
-use crate::config::STAKING_AMOUNT;
-use crate::utils::Seed;
+use crate::utils::{Seed, select_block_proposer};
 pub struct Blockchain {
     pub chain: Vec<Block>,
     pub mempool: Mempool,
@@ -26,9 +25,9 @@ impl Blockchain {
         }
     }
 
-    pub fn select_block_proposer(&self) -> String {
-        let mut lowest_weight = f64::INFINITY;
-        String::new()
+    pub fn select_block_proposer(&self) -> &Account {
+        let seed = Seed::new_epoch_seed(&self.validator);
+        select_block_proposer(seed, &self.validator)
     }
 
     fn handle_transaction(&mut self, transaction: Transaction) {
@@ -84,3 +83,4 @@ impl Blockchain {
     }
 
 }
+
