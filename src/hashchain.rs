@@ -26,8 +26,8 @@ impl HashChain {
         HashChain { hash_chain }
     }
 
-    pub fn get_hash(&self, index: usize) -> String {
-        self.hash_chain[index].clone()
+    pub fn get_hash(&self, index: usize) -> HashChainMessage {
+        HashChainMessage { hash_chain_index: self.hash_chain[index].clone() }
     }
 }
 

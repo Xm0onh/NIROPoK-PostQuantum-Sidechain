@@ -12,7 +12,9 @@ impl Seed {
         let mut seed = vec![0u8; 32];
         for (_, hash_value) in validator.hash_chain_com.iter() {
             for (i, byte) in hash_value.hash_chain_index.as_bytes().iter().enumerate() {
-                seed[i] ^= *byte;
+                if (i < 32) {
+                    seed[i] ^= *byte;
+                }
             }
         }
         Seed { seed: seed.try_into().unwrap() }

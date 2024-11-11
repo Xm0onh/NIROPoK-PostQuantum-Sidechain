@@ -107,9 +107,8 @@ async fn main() {
             EventType::Epoch => {
                 info!("epoch event");
                 let hash_chain = HashChain::new();
-                let hash_chain_message = HashChainMessage {
-                    hash_chain_index: hash_chain.get_hash(EPOCH_DURATION as usize),
-                };
+                let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize);
+                
                 let json = serde_json::to_string(&hash_chain_message).unwrap();
                 swarm.behaviour_mut().floodsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
             }

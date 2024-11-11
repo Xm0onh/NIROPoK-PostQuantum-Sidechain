@@ -5,6 +5,8 @@ use crate::wallet::Wallet;
 use crate::validator::Validator;
 use crate::transaction::{Transaction, TransactionType};
 use crate::utils::{Seed, select_block_proposer};
+use crate::hashchain::HashChain;
+use crate::config::EPOCH_DURATION;
 pub struct Blockchain {
     pub chain: Vec<Block>,
     pub mempool: Mempool,
@@ -82,5 +84,61 @@ impl Blockchain {
         self.chain.iter().any(|b| b.id == block.id)
     }
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup_blockchain() -> Blockchain {
+        let wallet = Wallet::new().unwrap();
+        Blockchain::new(wallet)
+    }
+
+    #[test]
+    fn test_select_block_proposer() {
+        let mut blockchain = setup_blockchain();
+        
+        let mut wallet1 = Wallet::new().unwrap();
+        let validator1 = Account { address: wallet1.get_public_key()};
+        let mut wallet2 = Wallet::new().unwrap();
+        let validator2 = Account { address: wallet2.get_public_key() };
+        
+
+
+        let stake_txn1 = Transaction::new(
+            &mut wallet1,
+            validator1.clone(),
+            validator1.clone(),
+            100.0,
+            0,
+            TransactionType::STAKE,
+            ).unwrap();
+        let stake_txn2 = Transaction::new(
+            &mut wallet2,
+            validator2.clone(),
+            validator2.clone(),
+            200.0,
+            0,
+            TransactionType::STAKE,
+            ).unwrap();
+
+        blockchain.handle_stake(stake_txn1);
+        blockchain.handle_stake(stake_txn2);
+
+        // Hash chain
+        let hash_chain_validator1 = HashChain::new();
+        let hash_chain_validator2 = HashChain::new();
+
+        blockchain.validator.update_validator_com(validator1.clone(), hash_chain_validator1.get_hash(EPOCH_DURATION as usize));
+        blockchain.validator.update_validator_com(validator2.clone(), hash_chain_validator2.get_hash(EPOCH_DURATION as usize));
+
+        let proposer = blockchain.select_block_proposer();
+        println!("Proposer: {}", proposer.address);
+        assert!(
+            proposer.address == validator1.address || 
+            proposer.address == validator2.address
+        );
+    }
 }
 

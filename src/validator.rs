@@ -30,8 +30,8 @@ impl Validator {
         Ok(true)
     }
 
-    pub fn update_validator_com(&mut self, address: String, com: HashChainMessage) {
-        self.hash_chain_com.insert(address, com);
+    pub fn update_validator_com(&mut self, account: Account, com: HashChainMessage) {
+        self.hash_chain_com.insert(account.address, com);
     }
 
     pub fn reset_validator_com(&mut self) {
