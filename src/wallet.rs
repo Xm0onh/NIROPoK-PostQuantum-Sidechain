@@ -1,5 +1,7 @@
 use crystals_dilithium::dilithium2::{Keypair, Signature};
+
 use serde::{Deserialize, Serialize, Deserializer, Serializer};
+
 pub struct Wallet {
     pub keypair: Keypair,
 }

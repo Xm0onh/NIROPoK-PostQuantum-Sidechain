@@ -4,7 +4,7 @@ use sha3::{Digest, Sha3_256};
 use crate::wallet::Wallet;
 use chrono::Utc;
 use crate::accounts::Account;
-
+use log::info;
 // Custom serialization for Signature
 fn serialize_signature<S>(signature: &Signature, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -49,7 +49,6 @@ pub struct Transaction {
     pub txn_type: TransactionType,
 }
 
-#[allow(dead_code)]
 impl Transaction {
     pub fn new(
         sender_wallet: &mut Wallet,
@@ -73,6 +72,7 @@ impl Transaction {
         txn.hash = txn.compute_hash();
         txn.signature = sender_wallet.sign_message(&txn.hash);
         Ok(txn)
+
     }
 
     pub fn verify(&self) -> Result<bool, String> {

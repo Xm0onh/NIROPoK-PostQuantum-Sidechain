@@ -4,6 +4,7 @@ use crate::blockchain::Blockchain;
 use crate::hashchain::HashChainMessage;
 use crate::accounts::Account;
 use crate::validator::Validator;
+use crate::genesis::Genesis;
 use libp2p::{
     floodsub::{Floodsub, FloodsubEvent, Topic},
     identity,
@@ -25,6 +26,7 @@ pub static CHAIN_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("chains"));
 pub static BLOCK_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("blocks"));
 pub static TRANSACTION_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("transactions"));
 pub static HASH_CHAIN_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("hash_chains"));
+pub static GENESIS_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("genesis"));
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChainRequest {
     pub from_peer_id: PeerId,
@@ -40,6 +42,7 @@ pub struct ChainResponse {
 #[allow(dead_code)]
 pub enum EventType {
     Command(String),
+    Genesis,
     Epoch,
     Mining,
     HashChain,
@@ -83,6 +86,7 @@ impl AppBehaviour {
         behaviour.floodsub.subscribe(BLOCK_TOPIC.clone());
         behaviour.floodsub.subscribe(TRANSACTION_TOPIC.clone());
         behaviour.floodsub.subscribe(HASH_CHAIN_TOPIC.clone());
+        behaviour.floodsub.subscribe(GENESIS_TOPIC.clone());
         behaviour
     }
 
@@ -96,9 +100,15 @@ impl AppBehaviour {
     fn handle_floodsub_event(&mut self, event: FloodsubEvent, blockchain: Arc<Mutex<Blockchain>>) {
         if let FloodsubEvent::Message(message) = event {
             let mut blockchain = blockchain.lock().unwrap();
-
+            // Genesis message
+            if let Ok(genesis) = serde_json::from_slice::<Genesis>(&message.data) {
+                info!("Received genesis message from {:?}", message.source);
+                // Add the validator to the validator set
+                let account = Account { address: genesis.stake_txn.recipient.address.clone() };
+                blockchain.validator.add_validator(account, genesis.stake_txn.clone()).unwrap();
+            }
             // Chain response
-            if let Ok(resp) = serde_json::from_slice::<ChainResponse>(&message.data) {
+            else if let Ok(resp) = serde_json::from_slice::<ChainResponse>(&message.data) {
                 if resp.from_peer_id ==  PEER_ID.to_string() {
                     info!("Received chain from {:?}", message.source);
                     // blockchain.replace_chain(&data.blocks);
@@ -153,8 +163,21 @@ impl AppBehaviour {
                     // Check if it is the end of the epoch
                     if blockchain.epoch.is_end_of_epoch() {
                         blockchain.end_of_epoch();
-                    } else {
-                        // Find the new proposer
+                    }
+                }
+            }
+            // Hash chain message
+            else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(&message.data) {
+                info!("Received a hash chain message from {:?}: {:?}", message.source, msg);
+                Validator::update_validator_com(&mut blockchain.validator, Account { address: message.source.to_string() }  , msg);
+                // Check if it received the hash chain from all validators
+                info!("Checking if the hash chain is complete");
+                if blockchain.validator.hash_chain_received() {
+                    let seed = blockchain.new_epoch();
+                    let proposer = blockchain.select_block_proposer(seed);
+                    if proposer.address == blockchain.wallet.get_public_key().to_string() {
+                        info!("I am the proposer for the new epoch");
+                        blockchain.epoch.progress();
                         let next_seed = blockchain.get_next_seed();
                         let proposer = blockchain.select_block_proposer(next_seed);
                         if proposer.address == blockchain.wallet.get_public_key().to_string() {
@@ -175,26 +198,6 @@ impl AppBehaviour {
                         }
                     }
                 }
-            }
-            // Hash chain message
-            else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(&message.data) {
-                info!("Received a hash chain message from {:?}: {:?}", message.source, msg);
-                Validator::update_validator_com(&mut blockchain.validator, Account { address: message.source.to_string() }  , msg);
-                // Check if it received the hash chain from all validators
-                if blockchain.validator.hash_chain_received() {
-                    let seed = blockchain.new_epoch();
-                    let proposer = blockchain.select_block_proposer(seed);
-                    if proposer.address == blockchain.wallet.get_public_key().to_string() {
-                        info!("I am the proposer for the new epoch");
-                        // TODO: propose a new block
-                        // TODO: Broadcast the new block
-                        blockchain.epoch.progress();
-                    }
-                }
-            }
-            // Simple string message
-            else if let Ok(msg) = serde_json::from_slice::<String>(&message.data) {
-                info!("Received a simple string message from {:?}: {:?}", message.source, msg);
             }
         }
     }

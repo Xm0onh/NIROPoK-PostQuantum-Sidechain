@@ -7,7 +7,7 @@ pub struct HashChain {
     pub hash_chain: Vec<String>
 }
 
-#[derive(Debug,Serialize, Deserialize)]
+#[derive(Debug,Serialize, Deserialize, Clone)]
 pub struct HashChainMessage {
     pub hash_chain_index: String,
 }

@@ -27,14 +27,16 @@ mod hashchain;
 mod config;
 mod utils;
 mod epoch;
+mod genesis;
+
 
 use blockchain::Blockchain;
-use hashchain::{HashChain, HashChainMessage};
+use hashchain::HashChain;
 use config::*;
 use transaction::{Transaction, TransactionType};
 use log::info;
-
-
+use accounts::Account;
+use genesis::Genesis;
 
 #[tokio::main]
 async fn main() {
@@ -42,9 +44,16 @@ async fn main() {
     info!("Starting the new Peer, {}", p2p::PEER_ID.clone());
     let (epoch_sender, mut epoch_rcv) = mpsc::unbounded_channel::<bool>();
     let (mining_sender, mut mining_rcv) = mpsc::unbounded_channel::<bool>();
+    let (genesis_sender, mut genesis_rcv) = mpsc::unbounded_channel::<bool>();
 
     let wallet = wallet::Wallet::new().unwrap();
     let blockchain = Arc::new(Mutex::new(Blockchain::new(wallet)));
+    // Lock the blockchain once
+    let mut blockchain_guard = blockchain.lock().unwrap();
+  
+    
+    // Add funds to the wallet
+    blockchain_guard.fund_wallet(10000.00);
 
     let behavior = p2p::AppBehaviour::new().await;
     let transport = libp2p::tokio_development_transport(p2p::KEYS.clone()).expect("Failed to create transport");
@@ -59,22 +68,30 @@ async fn main() {
 
     swarm.listen_on(listen_addr).expect("Failed to listen on address");
     
+    // Send a genesis event after 1 second
+    spawn(async move {
+        sleep(Duration::from_secs(1)).await;
+        info!("sending genesis event");
+        genesis_sender.send(true).expect("can't send genesis event");
+    });
+
+
      // Send an init event after 1 second
-     let epoch_sender_clone = epoch_sender.clone();
-     spawn(async move {
-         sleep(Duration::from_secs(EPOCH_DURATION)).await;
-         info!("sending epoch event");
-         epoch_sender_clone.send(true).expect("can send epoch event");
-     });
+    //  let epoch_sender_clone = epoch_sender.clone();
+    //  spawn(async move {
+    //      sleep(Duration::from_secs(EPOCH_DURATION)).await;
+    //      info!("sending epoch event");
+    //      epoch_sender_clone.send(true).expect("can't send epoch event");
+    //  });
 
      let mut planner = periodic::Planner::new();
      planner.start();
     
-    let mining_sender_clone = mining_sender.clone();
-    planner.add(
-        move || mining_sender_clone.send(true).expect("can send mining event"),
-        periodic::Every::new(Duration::from_secs(1)),
-    );
+    // let mining_sender_clone = mining_sender.clone();
+    // planner.add(
+    //     move || mining_sender_clone.send(true).expect("can't send mining event"),
+    //     periodic::Every::new(Duration::from_secs(1)),
+    // );
    
      loop {
       let evt =  {
@@ -82,6 +99,7 @@ async fn main() {
         line = stdin.next_line() => Some(p2p::EventType::Command(line.expect("can get line").expect("can read line from stdin"))),
         _epoch = epoch_rcv.recv() => Some(p2p::EventType::Epoch),
         _mining = mining_rcv.recv() => Some(p2p::EventType::Mining),
+        _genesis = genesis_rcv.recv() => Some(p2p::EventType::Genesis),
         event = swarm.select_next_some() => {
             match event {
                 SwarmEvent::Behaviour(e) => {
@@ -106,6 +124,31 @@ async fn main() {
                 info!("command: {:?}", cmd);
             }
 
+            EventType::Genesis => {
+                info!("Genesis event");
+                let hash_chain = HashChain::new();
+                let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize);
+                info!("hash chain message: {:?}", hash_chain_message);
+                // Create a stake transaction
+                let wallet = &mut blockchain_guard.wallet;
+                let public_key_str = wallet.get_public_key().to_string();
+                let account = Account { address: public_key_str.clone() };
+            
+                // Create the transaction
+                let stake_txn = Transaction::new(
+                    wallet,
+                    account.clone(),
+                    account.clone(),
+                    1000.00,
+                    0,
+                    TransactionType::STAKE
+                ).unwrap();
+                let genesis = Genesis::new(hash_chain_message, stake_txn);
+                let json = serde_json::to_string(&genesis).unwrap();
+                info!("sending genesis message");
+                swarm.behaviour_mut().floodsub.publish(p2p::GENESIS_TOPIC.clone(), json.as_bytes());
+            }
+
             EventType::Epoch => {
                 info!("New Epoch");
                 let hash_chain = HashChain::new();
@@ -115,9 +158,29 @@ async fn main() {
             }
 
             EventType::Mining => {
-                // info!("mining event");
-                // let json = serde_json::to_string("Hi").unwrap();
-                // swarm.behaviour_mut().floodsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes());
+                info!("mining event");
+                
+                let mut blockchain = blockchain.lock().unwrap();
+                if (blockchain.epoch.timestamp % EPOCH_DURATION) != 0 {
+                let next_seed = blockchain.get_next_seed();
+                let proposer = blockchain.select_block_proposer(next_seed);
+                if proposer.address == blockchain.wallet.get_public_key().to_string() {
+                    info!("I am the proposer for the new epoch");
+                    // Pull the hash chain index for the new block
+                    let hash_chain_index = blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
+                    // Propose the new block
+                    let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
+                    let new_block = blockchain.propose_block(
+                        hash_chain_index.hash_chain_index, my_address, next_seed);
+                    // Add the new block to the chain
+                    blockchain.chain.push(new_block.clone());
+                    // Execute the new block
+                    blockchain.execute_block(new_block.clone());
+                    // Broadcast the new block
+                    let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
+                    swarm.behaviour_mut().floodsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes());
+                    }
+                }
             }
             EventType::HashChain => {
                 info!("hash chain event");

@@ -148,6 +148,13 @@ impl Blockchain {
         self.chain.iter().any(|b| b.id == block.id)
     }
 
+    
+
+
+    // Just a function for testing - funding the wallet
+    pub fn fund_wallet(&mut self, amount: f64) {
+        self.state.balances.insert(Account { address: self.wallet.get_public_key().to_string() }, amount);
+    }
 }
 
 #[cfg(test)]
