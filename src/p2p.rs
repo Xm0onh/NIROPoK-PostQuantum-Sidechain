@@ -159,10 +159,15 @@ impl AppBehaviour {
                         let proposer = blockchain.select_block_proposer(next_seed);
                         if proposer.address == blockchain.wallet.get_public_key().to_string() {
                             info!("I am the proposer for the new epoch");
+                            // Pull the hash chain index for the new block
                             let hash_chain_index = blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
+                            // Propose the new block
                             let new_block = blockchain.propose_block(hash_chain_index.hash_chain_index, next_seed);
+                            // Add the new block to the chain
                             blockchain.chain.push(new_block.clone());
+                            // Execute the new block
                             blockchain.execute_block(new_block.clone());
+                            // Broadcast the new block
                             let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
                             self.floodsub.publish(BLOCK_TOPIC.clone(), json.as_bytes());
                         }
