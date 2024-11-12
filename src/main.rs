@@ -122,6 +122,7 @@ async fn main() {
             EventType::HashChain => {
                 info!("hash chain event");
                 let hash_chain = HashChain::new();
+                blockchain.lock().unwrap().hash_chain = hash_chain.clone();
                 let json = serde_json::to_string(&hash_chain).unwrap();
                 swarm.behaviour_mut().floodsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
             }   

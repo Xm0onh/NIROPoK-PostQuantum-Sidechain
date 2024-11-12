@@ -2,7 +2,9 @@
 use crate::validator::Validator;
 use sha3::{Digest, Sha3_256};
 use crate::accounts::Account;
-#[derive(Debug, Clone, Copy)]
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Seed {
     pub seed: [u8; 32],
 }
@@ -25,12 +27,12 @@ impl Seed {
     }
 }
 
-pub fn get_block_seed(proposer_hash: String, prev_seed: [u8; 32]) -> [u8; 32] {
+pub fn get_block_seed(proposer_hash: String, prev_seed: [u8; 32]) -> Seed {
     let mut seed = vec![0u8; 32];
     for (i, byte) in proposer_hash.as_bytes().iter().enumerate() {
         seed[i] = *byte ^ prev_seed[i];
     }
-    seed.try_into().unwrap()
+    Seed { seed: seed.try_into().unwrap() }
 }
 
 pub fn select_block_proposer(seed: Seed, validator: &Validator) -> &Account {

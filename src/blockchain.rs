@@ -4,7 +4,7 @@ use crate::accounts::{Account, State};
 use crate::wallet::Wallet;
 use crate::validator::Validator;
 use crate::transaction::{Transaction, TransactionType};
-use crate::utils::{Seed, select_block_proposer};
+use crate::utils::{Seed, select_block_proposer, get_block_seed};
 use crate::epoch::Epoch;
 use crate::hashchain::HashChain;
 use crate::config::EPOCH_DURATION;
@@ -16,6 +16,7 @@ pub struct Blockchain {
     pub validator: Validator,
     pub epoch: Epoch,
     pub buffer: Buffer,
+    pub hash_chain: HashChain,
 }
 
 pub struct Buffer {
@@ -47,6 +48,7 @@ impl Blockchain {
             validator: Validator::new(),
             epoch: Epoch::new(),
             buffer: Buffer::new(),
+            hash_chain: HashChain::new(),
         }
     }
 
@@ -89,6 +91,18 @@ impl Blockchain {
     // TODO
     // fn handle_unstake(&mut self, transaction: Transaction) {}
     
+    pub fn get_next_seed(&self) -> Seed {
+        let latest_block = self.chain.last().unwrap();
+        get_block_seed(latest_block.proposer_hash.clone(), latest_block.seed.get_seed())
+    }
+
+    pub fn propose_block(&mut self, proposer_hash: String, seed: Seed ) -> Block {
+        let latest_block = self.chain.last().unwrap();
+        let block = Block::new(latest_block.id + 1, latest_block.hash, latest_block.timestamp, latest_block.txn.clone(), proposer_hash, seed).unwrap();
+        block
+    }
+
+
     pub fn verify_block(&mut self, block: Block) -> Result<bool, String> {
         let previous_block = self.chain.last().unwrap();
         if block.previous_hash != previous_block.hash {

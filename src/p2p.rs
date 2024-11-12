@@ -1,4 +1,3 @@
-
 use crate::transaction::Transaction;
 use crate::block::Block;
 use crate::blockchain::Blockchain;
@@ -157,6 +156,17 @@ impl AppBehaviour {
                     }
 
                     // Find the new proposer
+                    let next_seed = blockchain.get_next_seed();
+                    let proposer = blockchain.select_block_proposer(next_seed);
+                    if proposer.address == blockchain.wallet.get_public_key().to_string() {
+                        info!("I am the proposer for the new epoch");
+                        let hash_chain_index = blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
+                        let new_block = blockchain.propose_block(hash_chain_index.hash_chain_index, next_seed);
+                        blockchain.chain.push(new_block.clone());
+                        blockchain.execute_block(new_block.clone());
+                        let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
+                        self.floodsub.publish(BLOCK_TOPIC.clone(), json.as_bytes());
+                    }
                 }
             }
             // Hash chain message
