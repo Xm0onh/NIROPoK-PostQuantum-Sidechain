@@ -31,10 +31,10 @@ impl HashChain {
     }
 }
 
-pub fn verify_hash_chain_index(commitment: String, index: u64, received_hash: HashChainMessage) -> bool {
+pub fn verify_hash_chain_index(commitment: String, index: u64, received_hash: &HashChainMessage) -> bool {
     let mut hasher = Sha3_256::new();
     hasher.update(received_hash.hash_chain_index.as_bytes());
-    for i in index..(EPOCH_DURATION + 1) {
+    for _ in index..(EPOCH_DURATION + 1) {
         let hash = hasher.clone().finalize();
         hasher.update(hash);
     }

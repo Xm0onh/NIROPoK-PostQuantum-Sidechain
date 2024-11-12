@@ -1,4 +1,3 @@
-use crate::utils::Seed;
 use crate::config::EPOCH_DURATION;
 pub struct Epoch {
     pub timestamp: u64,

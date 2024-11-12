@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 use rs_merkle::{Hasher, MerkleTree};
 use sha3::{Digest, Sha3_256};
 use crate::utils::Seed;
-
+use crate::accounts::Account;
 #[derive(Clone)]
 #[allow(dead_code)]
 struct Sha3Hasher;
@@ -24,18 +24,20 @@ pub struct Block {
     pub previous_hash: [u8; 32],
     pub timestamp: usize,
     pub txn: Vec<Transaction>,
+    pub proposer_address: Account,
     pub proposer_hash: String,
     pub seed: Seed,
 }
 
 impl Block {
-    pub fn new(id: usize, previous_hash: [u8; 32], timestamp: usize, txn: Vec<Transaction>, proposer_hash: String, seed: Seed) -> Result<Self, String> {
+    pub fn new(id: usize, previous_hash: [u8; 32], timestamp: usize, txn: Vec<Transaction>, proposer_address: Account, proposer_hash: String, seed: Seed) -> Result<Self, String> {
         let mut block = Self { 
             id,
             hash: [0u8; 32],
             previous_hash,
             timestamp,
             txn,
+            proposer_address,
             proposer_hash,
             seed,
         };

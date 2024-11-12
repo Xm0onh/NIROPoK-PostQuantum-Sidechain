@@ -8,13 +8,13 @@ use libp2p::{
     floodsub::{Floodsub, FloodsubEvent, Topic},
     identity,
     mdns::{tokio::Behaviour as Mdns, Event as MdnsEvent},
-    swarm::{ NetworkBehaviour},
+    swarm::NetworkBehaviour,
     PeerId,
 };
 use serde::{Serialize, Deserialize};
 use once_cell::sync::Lazy;
 use serde_json;
-use std::{sync::{Arc, Mutex}};
+use std::sync::{Arc, Mutex};
 use log::info;
 
 
@@ -162,7 +162,9 @@ impl AppBehaviour {
                             // Pull the hash chain index for the new block
                             let hash_chain_index = blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
                             // Propose the new block
-                            let new_block = blockchain.propose_block(hash_chain_index.hash_chain_index, next_seed);
+                            let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
+                            let new_block = blockchain.propose_block(
+                                hash_chain_index.hash_chain_index, my_address, next_seed);
                             // Add the new block to the chain
                             blockchain.chain.push(new_block.clone());
                             // Execute the new block

@@ -32,15 +32,20 @@ impl Validator {
         }
     }
 
-    pub fn remove_validator(&mut self, account: Account, txn: Transaction) -> Result<bool, String> {
-        self.state.remove_account(account);
-        Ok(true)
+    // pub fn remove_validator(&mut self, account: Account, txn: Transaction) -> Result<bool, String> {
+    //     self.state.remove_account(account);
+    //     Ok(true)
+    // }
+
+    pub fn get_validator_commitment(&self, account: Account) -> &HashChainMessage {
+        self.hash_chain_com.get(&account.address).unwrap()
     }
 
     pub fn update_validator_com(&mut self, account: Account, com: HashChainMessage) {
         self.hash_chain_com.insert(account.address, com);
     }
 
+    #[allow(dead_code)]
     pub fn reset_validator_com(&mut self) {
         self.hash_chain_com.clear();
     }

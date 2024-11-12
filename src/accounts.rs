@@ -24,6 +24,7 @@ impl State {
         }
     }
 
+    #[allow(dead_code)]
     pub fn remove_account(&mut self, account: Account) {
         self.balances.remove(&account);
         self.accounts.retain(|a| a != &account);
@@ -38,10 +39,12 @@ impl State {
         self.balances.entry(account).and_modify(|v| *v += amount);
     }
 
+    #[allow(dead_code)]
     pub fn unstake(&mut self, account: Account, amount: f64) {
         self.balances.entry(account).and_modify(|v| *v -= amount);
     }
 
+    #[allow(dead_code)]
     pub fn get_balance(&self, account: Account) -> f64 {
         *self.balances.get(&account).unwrap_or(&0.00)
     }

@@ -6,8 +6,11 @@ use crate::validator::Validator;
 use crate::transaction::{Transaction, TransactionType};
 use crate::utils::{Seed, select_block_proposer, get_block_seed};
 use crate::epoch::Epoch;
-use crate::hashchain::HashChain;
+use crate::hashchain::{HashChain, verify_hash_chain_index};
+
+#[allow(unused_imports)]
 use crate::config::EPOCH_DURATION;
+
 pub struct Blockchain {
     pub chain: Vec<Block>,
     pub mempool: Mempool,
@@ -96,9 +99,17 @@ impl Blockchain {
         get_block_seed(latest_block.proposer_hash.clone(), latest_block.seed.get_seed())
     }
 
-    pub fn propose_block(&mut self, proposer_hash: String, seed: Seed ) -> Block {
+    pub fn propose_block(&mut self, proposer_hash: String, proposer_address: Account, seed: Seed ) -> Block {
         let latest_block = self.chain.last().unwrap();
-        let block = Block::new(latest_block.id + 1, latest_block.hash, latest_block.timestamp, latest_block.txn.clone(), proposer_hash, seed).unwrap();
+        let block = Block::new(
+            latest_block.id + 1, 
+            latest_block.hash, 
+            latest_block.timestamp, 
+            latest_block.txn.clone(), 
+            proposer_address, 
+            proposer_hash, 
+            seed
+        ).unwrap();
         block
     }
 
@@ -108,7 +119,12 @@ impl Blockchain {
         if block.previous_hash != previous_block.hash {
             return Err("Previous block hash does not match".to_string());
         }
-        // TODO - Verify the proposer
+
+        let proposer_address = block.proposer_address;
+        let proposer_commtiment = self.validator.get_validator_commitment(proposer_address);
+        if !verify_hash_chain_index(block.proposer_hash, self.epoch.timestamp as u64, proposer_commtiment) {
+            return Err("Hash chain index does not match".to_string());
+        }
         Ok(true)
     }
     
@@ -124,9 +140,9 @@ impl Blockchain {
         }
     }
 
-    pub fn get_validator(&self) -> &Validator {
-        &self.validator
-    }
+    // pub fn get_validator(&self) -> &Validator {
+    //     &self.validator
+    // }
 
     pub fn block_exists(&self, block: Block) -> bool {
         self.chain.iter().any(|b| b.id == block.id)

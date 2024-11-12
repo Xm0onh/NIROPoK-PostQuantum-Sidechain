@@ -18,6 +18,7 @@ impl Mempool {
         self.transactions.retain(|t| t.hash != txn.hash);
     }
 
+    #[allow(dead_code)]
     pub fn get_mempool(&self) -> Vec<Transaction> {
         self.transactions.clone()
     }
@@ -26,6 +27,7 @@ impl Mempool {
         self.transactions.iter().any(|t| t.hash == *hash)
     }
 
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.transactions.clear();
     }

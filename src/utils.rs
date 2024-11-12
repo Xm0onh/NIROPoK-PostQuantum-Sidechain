@@ -14,7 +14,7 @@ impl Seed {
         let mut seed = vec![0u8; 32];
         for (_, hash_value) in validator.hash_chain_com.iter() {
             for (i, byte) in hash_value.hash_chain_index.as_bytes().iter().enumerate() {
-                if (i < 32) {
+                if i < 32 {
                     seed[i] ^= *byte;
                 }
             }
@@ -36,7 +36,7 @@ pub fn get_block_seed(proposer_hash: String, prev_seed: [u8; 32]) -> Seed {
 }
 
 pub fn select_block_proposer(seed: Seed, validator: &Validator) -> &Account {
-    let N: f64 = 1e9; // large constant
+    let n: f64 = 1e9; // large constant
     let mut weights = vec![0f64; validator.state.accounts.len()];
     let mut proposer = &validator.state.accounts[0];
     for (i, account) in validator.state.accounts.iter().enumerate() {
@@ -45,7 +45,7 @@ pub fn select_block_proposer(seed: Seed, validator: &Validator) -> &Account {
         hasher.update(validator.hash_chain_com.get(&account.address).unwrap().hash_chain_index.as_bytes());
         let hash_result = hasher.finalize();
         let numeric_value = u64::from_be_bytes([hash_result[0], hash_result[1], hash_result[2], hash_result[3], hash_result[4], hash_result[5], hash_result[6], hash_result[7]]);
-        weights[i] = N - (numeric_value as f64 / validator.state.balances.get(&account).unwrap());
+        weights[i] = n - (numeric_value as f64 / validator.state.balances.get(&account).unwrap());
     };
 
     let mut lowest_weight = f64::INFINITY;
