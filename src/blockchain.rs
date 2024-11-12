@@ -196,7 +196,7 @@ mod tests {
 
         blockchain.handle_stake(stake_txn1);
         blockchain.handle_stake(stake_txn2);
-
+        blockchain.end_of_epoch();
         // Hash chain
         let hash_chain_validator1 = HashChain::new();
         let hash_chain_validator2 = HashChain::new();

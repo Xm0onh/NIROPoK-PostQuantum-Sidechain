@@ -82,11 +82,12 @@ impl AppBehaviour {
             mdns: Mdns::new(Default::default(), *PEER_ID).expect("Failed to create mDNS behaviour"),
         };
 
+        info!("Subscribing to topics...");
+        behaviour.floodsub.subscribe(GENESIS_TOPIC.clone());
         behaviour.floodsub.subscribe(CHAIN_TOPIC.clone());
         behaviour.floodsub.subscribe(BLOCK_TOPIC.clone());
         behaviour.floodsub.subscribe(TRANSACTION_TOPIC.clone());
         behaviour.floodsub.subscribe(HASH_CHAIN_TOPIC.clone());
-        behaviour.floodsub.subscribe(GENESIS_TOPIC.clone());
         behaviour
     }
 
@@ -99,9 +100,11 @@ impl AppBehaviour {
 
     fn handle_floodsub_event(&mut self, event: FloodsubEvent, blockchain: Arc<Mutex<Blockchain>>) {
         if let FloodsubEvent::Message(message) = event {
+            info!("message: {:?}", message.data);
+
             let mut blockchain = blockchain.lock().unwrap();
             // Genesis message
-            if let Ok(genesis) = serde_json::from_slice::<Genesis>(&message.data) {
+            if let Ok(genesis) = bincode::deserialize::<Genesis>(&message.data) {
                 info!("Received genesis message from {:?}", message.source);
                 // Add the validator to the validator set
                 let account = Account { address: genesis.stake_txn.recipient.address.clone() };
@@ -199,6 +202,14 @@ impl AppBehaviour {
                     }
                 }
             }
+            
+            // Simple String
+            else if let Ok(msg) = serde_json::from_slice::<String>(&message.data) {
+                info!("Received a simple string from {:?}: {:?}", message.source, msg);
+            } else {
+                info!("Received an unknown message from {:?}: {:?}", message.source, message.data);
+            }
+        
         }
     }
 

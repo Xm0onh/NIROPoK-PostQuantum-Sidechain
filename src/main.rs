@@ -49,11 +49,7 @@ async fn main() {
     let wallet = wallet::Wallet::new().unwrap();
     let blockchain = Arc::new(Mutex::new(Blockchain::new(wallet)));
     // Lock the blockchain once
-    let mut blockchain_guard = blockchain.lock().unwrap();
-  
-    
-    // Add funds to the wallet
-    blockchain_guard.fund_wallet(10000.00);
+
 
     let behavior = p2p::AppBehaviour::new().await;
     let transport = libp2p::tokio_development_transport(p2p::KEYS.clone()).expect("Failed to create transport");
@@ -69,17 +65,18 @@ async fn main() {
     swarm.listen_on(listen_addr).expect("Failed to listen on address");
     
     // Send a genesis event after 1 second
+    let genesis_sender_clone = genesis_sender.clone();
     spawn(async move {
-        sleep(Duration::from_secs(1)).await;
+        sleep(Duration::from_secs(5)).await;
         info!("sending genesis event");
-        genesis_sender.send(true).expect("can't send genesis event");
+        genesis_sender_clone.send(true).expect("can't send genesis event");
     });
 
 
      // Send an init event after 1 second
     //  let epoch_sender_clone = epoch_sender.clone();
     //  spawn(async move {
-    //      sleep(Duration::from_secs(EPOCH_DURATION)).await;
+    //      sleep(Duration::from_secs(1)).await;
     //      info!("sending epoch event");
     //      epoch_sender_clone.send(true).expect("can't send epoch event");
     //  });
@@ -125,6 +122,8 @@ async fn main() {
             }
 
             EventType::Genesis => {
+                let mut blockchain_guard = blockchain.lock().unwrap();
+                blockchain_guard.fund_wallet(10000.00);
                 info!("Genesis event");
                 let hash_chain = HashChain::new();
                 let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize);
@@ -143,10 +142,23 @@ async fn main() {
                     0,
                     TransactionType::STAKE
                 ).unwrap();
-                let genesis = Genesis::new(hash_chain_message, stake_txn);
+                let genesis = Genesis::new(hash_chain_message, stake_txn.clone());
                 let json = serde_json::to_string(&genesis).unwrap();
-                info!("sending genesis message");
-                swarm.behaviour_mut().floodsub.publish(p2p::GENESIS_TOPIC.clone(), json.as_bytes());
+                info!("Serialized Genesis size: {} bytes", json.len());
+                let serialized = bincode::serialize(&genesis).unwrap();
+                info!("Serialized Genesis size: {} bytes", serialized.len());
+
+                // Unlocked the blockchain
+                drop(blockchain_guard);
+                let test = swarm.behaviour_mut().floodsub.publish(p2p::GENESIS_TOPIC.clone(), serialized);
+                info!("test: {:?}", test);
+                // info!("New Epoch");
+                // let hash_chain = HashChain::new();
+                // let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize);
+                // let json = serde_json::to_string(&hash_chain_message).unwrap();
+                // swarm.behaviour_mut().floodsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
+
+            
             }
 
             EventType::Epoch => {

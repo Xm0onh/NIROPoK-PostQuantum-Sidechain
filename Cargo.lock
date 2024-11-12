@@ -3443,6 +3443,7 @@ name = "niropok-pq-sidechain"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "bincode",
  "chrono",
  "crystals-dilithium",
  "futures",
