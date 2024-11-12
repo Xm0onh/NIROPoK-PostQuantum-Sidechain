@@ -26,6 +26,8 @@ mod validator;
 mod hashchain;
 mod config;
 mod utils;
+mod epoch;
+
 use blockchain::Blockchain;
 use hashchain::{HashChain, HashChainMessage};
 use config::*;
@@ -105,13 +107,13 @@ async fn main() {
             }
 
             EventType::Epoch => {
-                info!("epoch event");
+                info!("New Epoch");
                 let hash_chain = HashChain::new();
                 let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize);
-                
                 let json = serde_json::to_string(&hash_chain_message).unwrap();
                 swarm.behaviour_mut().floodsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
             }
+
             EventType::Mining => {
                 // info!("mining event");
                 // let json = serde_json::to_string("Hi").unwrap();

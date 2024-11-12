@@ -37,4 +37,8 @@ impl Validator {
     pub fn reset_validator_com(&mut self) {
         self.hash_chain_com.clear();
     }
+
+    pub fn hash_chain_received(&self) -> bool {
+        self.hash_chain_com.len() == self.state.accounts.len()
+    }
 }

@@ -154,6 +154,16 @@ impl AppBehaviour {
             else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(&message.data) {
                 info!("Received a hash chain message from {:?}: {:?}", message.source, msg);
                 Validator::update_validator_com(&mut blockchain.validator, Account { address: message.source.to_string() }  , msg);
+                // Check if it received the hash chain from all validators
+                if blockchain.validator.hash_chain_received() {
+                    let seed = blockchain.new_epoch();
+                    let proposer = blockchain.select_block_proposer(seed);
+                    if proposer.address == blockchain.wallet.get_public_key().to_string() {
+                        info!("I am the proposer for the new epoch");
+                        // TODO: propose a new block
+                        // TODO: Broadcast the new block
+                    }
+                }
             }
             // Simple string message
             else if let Ok(msg) = serde_json::from_slice::<String>(&message.data) {

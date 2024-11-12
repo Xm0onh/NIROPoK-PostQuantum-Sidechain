@@ -27,9 +27,12 @@ impl Blockchain {
         }
     }
 
-    pub fn select_block_proposer(&self) -> &Account {
-        let seed = Seed::new_epoch_seed(&self.validator);
+    pub fn select_block_proposer(&self, seed: Seed) -> &Account {
         select_block_proposer(seed, &self.validator)
+    }
+
+    pub fn new_epoch(&mut self) -> Seed {
+        Seed::new_epoch_seed(&self.validator)
     }
 
     fn handle_transaction(&mut self, transaction: Transaction) {
@@ -133,7 +136,8 @@ mod tests {
         blockchain.validator.update_validator_com(validator1.clone(), hash_chain_validator1.get_hash(EPOCH_DURATION as usize));
         blockchain.validator.update_validator_com(validator2.clone(), hash_chain_validator2.get_hash(EPOCH_DURATION as usize));
 
-        let proposer = blockchain.select_block_proposer();
+        let seed = blockchain.new_epoch();
+        let proposer = blockchain.select_block_proposer(seed);
         println!("Proposer: {}", proposer.address);
         assert!(
             proposer.address == validator1.address || 
