@@ -146,8 +146,17 @@ impl AppBehaviour {
                     // relay the block to other peers
                     let json = serde_json::to_string(&block).expect("Failed to serialize block");
                     self.floodsub.publish(BLOCK_TOPIC.clone(), json.as_bytes());
-
                     blockchain.execute_block(block.clone());
+
+                    // Progress the epoch
+                    blockchain.epoch.progress();
+
+                    // Check if it is the end of the epoch
+                    if blockchain.epoch.is_end_of_epoch() {
+                        blockchain.end_of_epoch();
+                    }
+
+                    // Find the new proposer
                 }
             }
             // Hash chain message
@@ -162,6 +171,7 @@ impl AppBehaviour {
                         info!("I am the proposer for the new epoch");
                         // TODO: propose a new block
                         // TODO: Broadcast the new block
+                        blockchain.epoch.progress();
                     }
                 }
             }

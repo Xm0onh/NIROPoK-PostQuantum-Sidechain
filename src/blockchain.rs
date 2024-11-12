@@ -5,6 +5,7 @@ use crate::wallet::Wallet;
 use crate::validator::Validator;
 use crate::transaction::{Transaction, TransactionType};
 use crate::utils::{Seed, select_block_proposer};
+use crate::epoch::Epoch;
 use crate::hashchain::HashChain;
 use crate::config::EPOCH_DURATION;
 pub struct Blockchain {
@@ -13,8 +14,28 @@ pub struct Blockchain {
     pub wallet: Wallet,
     pub state: State,
     pub validator: Validator,
+    pub epoch: Epoch,
+    pub buffer: Buffer,
 }
 
+pub struct Buffer {
+    pub accounts: Vec<Account>,
+    pub txns: Vec<Transaction>,
+}
+
+impl Buffer {
+    pub fn new() -> Self {
+        Self {
+            accounts: vec![],
+            txns: vec![],
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.accounts.clear();
+        self.txns.clear();
+    }
+}
 
 impl Blockchain {
     pub fn new(wallet: Wallet) -> Self {
@@ -24,6 +45,8 @@ impl Blockchain {
             wallet,
             state: State::new(),
             validator: Validator::new(),
+            epoch: Epoch::new(),
+            buffer: Buffer::new(),
         }
     }
 
@@ -52,8 +75,16 @@ impl Blockchain {
 
     fn handle_stake(&mut self, transaction: Transaction) {
         if transaction.verify().unwrap() {
-            self.validator.add_validator(transaction.sender.clone(), transaction.clone()).unwrap();
+            // Add to buffer
+            self.buffer.accounts.push(transaction.sender.clone());
+            self.buffer.txns.push(transaction.clone());
         }
+    }
+
+    pub fn end_of_epoch(&mut self) {
+        self.validator.apply_buffer(self.buffer.accounts.clone(), self.buffer.txns.clone());
+        self.buffer.reset();
+        self.epoch.reset();
     }
     // TODO
     // fn handle_unstake(&mut self, transaction: Transaction) {}

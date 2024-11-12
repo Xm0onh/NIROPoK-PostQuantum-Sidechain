@@ -25,6 +25,13 @@ impl Validator {
         Ok(true)
     }
 
+    pub fn apply_buffer(&mut self, accounts: Vec<Account>, txns: Vec<Transaction>) {
+        // update the list of validators by calling add_validator for each account
+        for (i, account) in accounts.iter().enumerate() {
+            self.add_validator(account.clone(), txns.get(i).unwrap().clone()).unwrap();
+        }
+    }
+
     pub fn remove_validator(&mut self, account: Account, txn: Transaction) -> Result<bool, String> {
         self.state.remove_account(account);
         Ok(true)
