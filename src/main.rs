@@ -148,9 +148,9 @@ async fn main() {
                 let serialized = bincode::serialize(&genesis).unwrap();
                 info!("Serialized Genesis size: {} bytes", serialized.len());
 
-                // Unlocked the blockchain
+                // Unlocked the blockchain          
                 drop(blockchain_guard);
-                let test = swarm.behaviour_mut().floodsub.publish(p2p::GENESIS_TOPIC.clone(), serialized);
+                let test = swarm.behaviour_mut().gossipsub.publish(p2p::GENESIS_TOPIC.clone(), serialized);
                 info!("test: {:?}", test);
                 // info!("New Epoch");
                 // let hash_chain = HashChain::new();
@@ -166,7 +166,7 @@ async fn main() {
                 let hash_chain = HashChain::new();
                 let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize);
                 let json = serde_json::to_string(&hash_chain_message).unwrap();
-                swarm.behaviour_mut().floodsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
+                swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
             }
 
             EventType::Mining => {
@@ -190,7 +190,7 @@ async fn main() {
                     blockchain.execute_block(new_block.clone());
                     // Broadcast the new block
                     let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
-                    swarm.behaviour_mut().floodsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes());
+                    swarm.behaviour_mut().gossipsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes());
                     }
                 }
             }
@@ -199,7 +199,7 @@ async fn main() {
                 let hash_chain = HashChain::new();
                 blockchain.lock().unwrap().hash_chain = hash_chain.clone();
                 let json = serde_json::to_string(&hash_chain).unwrap();
-                swarm.behaviour_mut().floodsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
+                swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
             }   
         }
     }

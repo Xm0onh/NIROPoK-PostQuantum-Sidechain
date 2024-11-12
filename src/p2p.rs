@@ -6,32 +6,42 @@ use crate::accounts::Account;
 use crate::validator::Validator;
 use crate::genesis::Genesis;
 use libp2p::{
-    floodsub::{Floodsub, FloodsubEvent, Topic},
+    gossipsub::{
+        Behaviour,
+        ConfigBuilder,
+        PeerScoreParams,
+        PeerScoreThresholds,
+        Event,
+        IdentTopic as Topic,
+        MessageAuthenticity,
+        MessageId,
+    },
     identity,
     mdns::{tokio::Behaviour as Mdns, Event as MdnsEvent},
     swarm::NetworkBehaviour,
     PeerId,
 };
+
 use serde::{Serialize, Deserialize};
 use once_cell::sync::Lazy;
 use serde_json;
 use std::sync::{Arc, Mutex};
 use log::info;
 
-
-#[allow(dead_code)]
 pub static KEYS: Lazy<identity::Keypair> = Lazy::new(|| identity::Keypair::generate_ed25519());
 pub static PEER_ID: Lazy<PeerId> = Lazy::new(|| PeerId::from_public_key(&KEYS.public()));
+
+pub static GENESIS_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("genesis"));
 pub static CHAIN_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("chains"));
 pub static BLOCK_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("blocks"));
 pub static TRANSACTION_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("transactions"));
 pub static HASH_CHAIN_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("hash_chains"));
-pub static GENESIS_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("genesis"));
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChainRequest {
     pub from_peer_id: PeerId,
-    
 }
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChainResponse {
     pub blocks: Vec<Block>,
@@ -49,22 +59,21 @@ pub enum EventType {
 }
 
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "P2PEvent", prelude = "libp2p::swarm::derive_prelude")]
+#[behaviour(out_event = "P2PEvent")]
 pub struct AppBehaviour {
-    pub floodsub: Floodsub,
+    pub gossipsub: Behaviour,
     pub mdns: Mdns,
 }
 
 #[derive(Debug)]
 pub enum P2PEvent {
-    Floodsub(FloodsubEvent),
+    Gossipsub(Event),
     Mdns(MdnsEvent),
 }
 
-
-impl From<FloodsubEvent> for P2PEvent {
-    fn from(event: FloodsubEvent) -> Self {
-        P2PEvent::Floodsub(event)
+impl From<Event> for P2PEvent {
+    fn from(event: Event) -> Self {
+        P2PEvent::Gossipsub(event)
     }
 }
 
@@ -74,142 +83,194 @@ impl From<MdnsEvent> for P2PEvent {
     }
 }
 
-
 impl AppBehaviour {
     pub async fn new() -> Self {
+        let gossipsub_config = ConfigBuilder::default()
+            .mesh_outbound_min(1)
+            .mesh_n_low(1)
+            .mesh_n(2)
+            .mesh_n_high(3)
+            .flood_publish(true)
+            .allow_self_origin(true)
+            .max_transmit_size(16 * 1024 * 1024)
+            .build()
+            .expect("Valid Gossipsub config");
+        // Create default peer score parameters
+        let peer_score_params = PeerScoreParams::default();
+
+        // Adjust peer score thresholds to accept all peers
+        let peer_score_thresholds = PeerScoreThresholds {
+            gossip_threshold: f64::MIN,
+            publish_threshold: f64::MIN,
+            graylist_threshold: f64::MIN,
+            ..Default::default()
+        };
+
+        let mut gossipsub = Behaviour::new(
+            MessageAuthenticity::Signed(KEYS.clone()),
+            gossipsub_config,
+        )
+        .expect("Failed to create Gossipsub behaviour with peer scoring");
+        
+        gossipsub.with_peer_score(peer_score_params, peer_score_thresholds).expect("Failed to set peer scoring");
+
         let mut behaviour = Self {
-            floodsub: Floodsub::new(*PEER_ID),
-            mdns: Mdns::new(Default::default(), *PEER_ID).expect("Failed to create mDNS behaviour"),
+            gossipsub,
+            mdns: Mdns::new(Default::default(), *PEER_ID)
+                .expect("Failed to create mDNS behaviour"),
         };
 
         info!("Subscribing to topics...");
-        behaviour.floodsub.subscribe(GENESIS_TOPIC.clone());
-        behaviour.floodsub.subscribe(CHAIN_TOPIC.clone());
-        behaviour.floodsub.subscribe(BLOCK_TOPIC.clone());
-        behaviour.floodsub.subscribe(TRANSACTION_TOPIC.clone());
-        behaviour.floodsub.subscribe(HASH_CHAIN_TOPIC.clone());
+        behaviour.gossipsub.subscribe(&GENESIS_TOPIC).unwrap();
+        behaviour.gossipsub.subscribe(&CHAIN_TOPIC).unwrap();
+        behaviour.gossipsub.subscribe(&BLOCK_TOPIC).unwrap();
+        behaviour.gossipsub.subscribe(&TRANSACTION_TOPIC).unwrap();
+        behaviour.gossipsub.subscribe(&HASH_CHAIN_TOPIC).unwrap();
+
         behaviour
     }
-
     pub fn handle_event(&mut self, event: P2PEvent, blockchain: Arc<Mutex<Blockchain>>) {
         match event {
-            P2PEvent::Floodsub(event) => self.handle_floodsub_event(event, blockchain),
+            P2PEvent::Gossipsub(event) => self.handle_gossipsub_event(event, blockchain),
             P2PEvent::Mdns(event) => self.handle_mdns_event(event),
         }
     }
 
-    fn handle_floodsub_event(&mut self, event: FloodsubEvent, blockchain: Arc<Mutex<Blockchain>>) {
-        if let FloodsubEvent::Message(message) = event {
-            info!("message: {:?}", message.data);
-
-            let mut blockchain = blockchain.lock().unwrap();
-            // Genesis message
-            if let Ok(genesis) = bincode::deserialize::<Genesis>(&message.data) {
-                info!("Received genesis message from {:?}", message.source);
-                // Add the validator to the validator set
-                let account = Account { address: genesis.stake_txn.recipient.address.clone() };
-                blockchain.validator.add_validator(account, genesis.stake_txn.clone()).unwrap();
+    fn handle_gossipsub_event(
+        &mut self,
+        event: Event,
+        blockchain: Arc<Mutex<Blockchain>>,
+    ) {
+        match event {
+            Event::Message { propagation_source, message_id: _, message } => {
+                let data = &message.data;
+                let source = message.source.unwrap_or(propagation_source);
+                self.process_message(data, source, blockchain);
             }
-            // Chain response
-            else if let Ok(resp) = serde_json::from_slice::<ChainResponse>(&message.data) {
-                if resp.from_peer_id ==  PEER_ID.to_string() {
-                    info!("Received chain from {:?}", message.source);
-                    // blockchain.replace_chain(&data.blocks);
-                    /*
-                    blockchain.mempool.transactions = data
-                    .txns
-                    .into_iter()
-                    .filter(|txn| Transaction::verify(txn).is_ok()) 
-                    .collect();
-                     */
-                }
-            } 
-            // Chain Request
-            else if let Ok(req) = serde_json::from_slice::<ChainRequest>(&message.data) {
-                info!("Received chain request from {:?}", message.source);
-                info!("Sending the chain and mempool to {:?}", message.source);
-                let peer_id = req.from_peer_id;
-                if peer_id == *PEER_ID {
-                    // TODO: send the chain and mempool
-                    // let json = serde_json::to_string(&ChainResponse{
-                    //     blocks: blockchain.chain.clone(),
-                    //     txns: blockchain.mempool.transactions.clone(),
-                    //     from_peer_id: PEER_ID.to_string(),
-                    // }).expect("Failed to serialize chain response");
+            _ => {}
+        }
+    }
+    
 
-                    // self.floodsub.publish(CHAIN_TOPIC.clone(), json.as_bytes())
+    fn process_message(&mut self, data: &[u8], source: PeerId, blockchain: Arc<Mutex<Blockchain>>) {
+        let mut blockchain = blockchain.lock().unwrap();
+
+        // Try deserializing as Genesis
+        if let Ok(genesis) = bincode::deserialize::<Genesis>(data) {
+            info!("Received genesis message from {:?}", source);
+            // Add the validator to the validator set
+            let account = Account {
+                address: genesis.stake_txn.recipient.address.clone(),
+            };
+            blockchain
+                .validator
+                .add_validator(account, genesis.stake_txn.clone())
+                .unwrap();
+        }
+        // Try deserializing as ChainResponse
+        else if let Ok(resp) = serde_json::from_slice::<ChainResponse>(data) {
+            if resp.from_peer_id == PEER_ID.to_string() {
+                info!("Received chain from {:?}", source);
+                // Handle the ChainResponse
+            }
+        }
+        // Try deserializing as ChainRequest
+        else if let Ok(req) = serde_json::from_slice::<ChainRequest>(data) {
+            info!("Received chain request from {:?}", source);
+            info!("Sending the chain and mempool to {:?}", source);
+            let peer_id = req.from_peer_id;
+            if peer_id == *PEER_ID {
+                // TODO: send the chain and mempool
+            }
+        }
+        // Try deserializing as Transaction
+        else if let Ok(txn) = serde_json::from_slice::<Transaction>(data) {
+            info!("Received a new transaction from {:?}", source);
+            if txn.verify().unwrap() && !blockchain.mempool.txn_exists(&txn.hash) {
+                blockchain.mempool.add_transaction(txn.clone());
+                // Relay the transaction to other peers
+                let json = serde_json::to_string(&txn).expect("Failed to serialize transaction");
+                if let Err(e) = self
+                    .gossipsub
+                    .publish(TRANSACTION_TOPIC.clone(), json.into_bytes())
+                {
+                    eprintln!("Failed to publish transaction: {}", e);
                 }
             }
-            // Receive a new Transaction
-            else if let Ok(txn) = serde_json::from_slice::<Transaction>(&message.data) {
-                info!("Received a new transaction from {:?}", message.source);
-                if txn.verify().unwrap() && !blockchain.mempool.txn_exists(&txn.hash) {
-                    blockchain.mempool.add_transaction(txn.clone());
-                    // relay the transaction to other peers
-                    let json = serde_json::to_string(&txn).expect("Failed to serialize transaction");
-                    self.floodsub.publish(TRANSACTION_TOPIC.clone(), json.as_bytes());
+        }
+        // Try deserializing as Block
+        else if let Ok(block) = serde_json::from_slice::<Block>(data) {
+            info!("Received a block from {:?}", source);
+            if blockchain.verify_block(block.clone()).unwrap() && !blockchain.block_exists(block.clone()) {
+                // Relay the block to other peers
+                let json = serde_json::to_string(&block).expect("Failed to serialize block");
+                if let Err(e) = self.gossipsub.publish(BLOCK_TOPIC.clone(), json.into_bytes()) {
+                    eprintln!("Failed to publish block: {}", e);
+                }
+                blockchain.execute_block(block.clone());
+
+                // Progress the epoch
+                blockchain.epoch.progress();
+
+                // Check if it is the end of the epoch
+                if blockchain.epoch.is_end_of_epoch() {
+                    blockchain.end_of_epoch();
                 }
             }
-
-            // Receive a new Block
-            else if let Ok(block) = serde_json::from_slice::<Block>(&message.data) {
-                info!("Received a block from {:?}", message.source);
-                if blockchain.verify_block(block.clone()).unwrap() && !blockchain.block_exists(block.clone()) {
-                    // relay the block to other peers
-                    let json = serde_json::to_string(&block).expect("Failed to serialize block");
-                    self.floodsub.publish(BLOCK_TOPIC.clone(), json.as_bytes());
-                    blockchain.execute_block(block.clone());
-
-                    // Progress the epoch
+        }
+        // Try deserializing as HashChainMessage
+        else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(data) {
+            info!("Received a hash chain message from {:?}: {:?}", source, msg);
+            Validator::update_validator_com(
+                &mut blockchain.validator,
+                Account {
+                    address: source.to_string(),
+                },
+                msg,
+            );
+            // Check if it received the hash chain from all validators
+            info!("Checking if the hash chain is complete");
+            if blockchain.validator.hash_chain_received() {
+                let seed = blockchain.new_epoch();
+                let proposer = blockchain.select_block_proposer(seed);
+                if proposer.address == blockchain.wallet.get_public_key().to_string() {
+                    info!("I am the proposer for the new epoch");
                     blockchain.epoch.progress();
-
-                    // Check if it is the end of the epoch
-                    if blockchain.epoch.is_end_of_epoch() {
-                        blockchain.end_of_epoch();
-                    }
-                }
-            }
-            // Hash chain message
-            else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(&message.data) {
-                info!("Received a hash chain message from {:?}: {:?}", message.source, msg);
-                Validator::update_validator_com(&mut blockchain.validator, Account { address: message.source.to_string() }  , msg);
-                // Check if it received the hash chain from all validators
-                info!("Checking if the hash chain is complete");
-                if blockchain.validator.hash_chain_received() {
-                    let seed = blockchain.new_epoch();
-                    let proposer = blockchain.select_block_proposer(seed);
+                    let next_seed = blockchain.get_next_seed();
+                    let proposer = blockchain.select_block_proposer(next_seed);
                     if proposer.address == blockchain.wallet.get_public_key().to_string() {
                         info!("I am the proposer for the new epoch");
-                        blockchain.epoch.progress();
-                        let next_seed = blockchain.get_next_seed();
-                        let proposer = blockchain.select_block_proposer(next_seed);
-                        if proposer.address == blockchain.wallet.get_public_key().to_string() {
-                            info!("I am the proposer for the new epoch");
-                            // Pull the hash chain index for the new block
-                            let hash_chain_index = blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
-                            // Propose the new block
-                            let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
-                            let new_block = blockchain.propose_block(
-                                hash_chain_index.hash_chain_index, my_address, next_seed);
-                            // Add the new block to the chain
-                            blockchain.chain.push(new_block.clone());
-                            // Execute the new block
-                            blockchain.execute_block(new_block.clone());
-                            // Broadcast the new block
-                            let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
-                            self.floodsub.publish(BLOCK_TOPIC.clone(), json.as_bytes());
+                        // Pull the hash chain index for the new block
+                        let hash_chain_index =
+                            blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
+                        // Propose the new block
+                        let my_address = Account {
+                            address: blockchain.wallet.get_public_key().to_string(),
+                        };
+                        let new_block = blockchain.propose_block(
+                            hash_chain_index.hash_chain_index,
+                            my_address,
+                            next_seed,
+                        );
+                        // Add the new block to the chain
+                        blockchain.chain.push(new_block.clone());
+                        // Execute the new block
+                        blockchain.execute_block(new_block.clone());
+                        // Broadcast the new block
+                        let json =
+                            serde_json::to_string(&new_block).expect("Failed to serialize block");
+                        if let Err(e) = self.gossipsub.publish(BLOCK_TOPIC.clone(), json.into_bytes()) {
+                            eprintln!("Failed to publish block: {}", e);
                         }
                     }
                 }
             }
-            
-            // Simple String
-            else if let Ok(msg) = serde_json::from_slice::<String>(&message.data) {
-                info!("Received a simple string from {:?}: {:?}", message.source, msg);
-            } else {
-                info!("Received an unknown message from {:?}: {:?}", message.source, message.data);
-            }
-        
+        }
+        // Try deserializing as String
+        else if let Ok(msg) = serde_json::from_slice::<String>(data) {
+            info!("Received a simple string from {:?}: {:?}", source, msg);
+        } else {
+            info!("Received an unknown message from {:?}: {:?}", source, data);
         }
     }
 
@@ -217,17 +278,17 @@ impl AppBehaviour {
         match event {
             MdnsEvent::Discovered(discovered_list) => {
                 for (peer_id, addr) in discovered_list {
-                    self.floodsub.add_node_to_partial_view(peer_id);
+                    self.gossipsub.add_explicit_peer(&peer_id); // Gossipsub handles peer connections automatically
                     info!("Discovered new peer: {:?}, addr: {:?}", peer_id, addr);
-                }
-        }
-         MdnsEvent::Expired(expired_list) => {
-            for (peer_id, addr) in expired_list {
-                self.floodsub.remove_node_from_partial_view(&peer_id);
-                info!("Expired peer: {:?}, addr: {:?}", peer_id, addr);
-            }
-         }
-    }
 
+                }
+            }
+            MdnsEvent::Expired(expired_list) => {
+                for (peer_id, _) in expired_list {
+                    self.gossipsub.remove_explicit_peer(&peer_id);
+                    info!("Expired peer: {:?}", peer_id);
+                }
+            }
+        }
     }
 }
