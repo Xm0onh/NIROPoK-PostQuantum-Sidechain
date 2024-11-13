@@ -72,21 +72,24 @@ async fn main() {
 
 
      // Send an init event after 1 second
-    //  let epoch_sender_clone = epoch_sender.clone();
-    //  spawn(async move {
-    //      sleep(Duration::from_secs(1)).await;
-    //      info!("sending epoch event");
-    //      epoch_sender_clone.send(true).expect("can't send epoch event");
-    //  });
+     let epoch_sender_clone = epoch_sender.clone();
+     spawn(async move {
+         sleep(Duration::from_secs(10)).await;
+         info!("sending epoch event");
+         epoch_sender_clone.send(true).expect("can't send epoch event");
+     });
 
-     let mut planner = periodic::Planner::new();
-     planner.start();
-    
-    // let mining_sender_clone = mining_sender.clone();
-    // planner.add(
-    //     move || mining_sender_clone.send(true).expect("can't send mining event"),
-    //     periodic::Every::new(Duration::from_secs(1)),
-    // );
+    let mut planner = periodic::Planner::new();
+    planner.start();
+    spawn(async move {
+        sleep(Duration::from_secs(15)).await;
+        info!("sending mining event");
+        let mining_sender_clone = mining_sender.clone();
+        planner.add(
+        move || mining_sender_clone.send(true).expect("can't send mining event"),
+        periodic::Every::new(Duration::from_secs(1)),
+        );
+    });
    
      loop {
       let evt =  {
@@ -122,9 +125,6 @@ async fn main() {
             EventType::Genesis => {
                 let mut blockchain_guard = blockchain.lock().unwrap();
                 info!("Genesis event");
-                let hash_chain = HashChain::new();
-                let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize);
-                info!("hash chain message: {:?}", hash_chain_message);
                 // Create a stake transaction
                 let wallet = &mut blockchain_guard.wallet;
                 let public_key_str = wallet.get_public_key().to_string();
@@ -138,13 +138,11 @@ async fn main() {
                     0,
                     TransactionType::STAKE
                 ).unwrap();
-                let genesis = Genesis::new(hash_chain_message, stake_txn.clone());
+                let genesis = Genesis::new( stake_txn.clone());
                 let json = serde_json::to_string(&genesis).unwrap();
                 info!("Serialized Genesis size: {} bytes", json.len());
                 let serialized = bincode::serialize(&genesis).unwrap();
                 info!("Serialized Genesis size: {} bytes", serialized.len());
-
-                // Unlocked the blockchain          
                 drop(blockchain_guard);
                 let test = swarm.behaviour_mut().gossipsub.publish(p2p::GENESIS_TOPIC.clone(), serialized);
                 info!("test: {:?}", test);
@@ -156,30 +154,56 @@ async fn main() {
                 let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize);
                 let json = serde_json::to_string(&hash_chain_message).unwrap();
                 swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes()).unwrap();
+                let mut blockchain = blockchain.lock().unwrap();
+                blockchain.epoch.progress();
+                info!("Epoch: {}", blockchain.epoch.timestamp);
+                drop(blockchain);
             }
 
             EventType::Mining => {
                 info!("mining event");
                 
                 let mut blockchain = blockchain.lock().unwrap();
-                if (blockchain.epoch.timestamp % EPOCH_DURATION) != 0 {
-                let next_seed = blockchain.get_next_seed();
-                let proposer = blockchain.select_block_proposer(next_seed);
-                if proposer.address == blockchain.wallet.get_public_key().to_string() {
-                    info!("I am the proposer for the new epoch");
-                    // Pull the hash chain index for the new block
-                    let hash_chain_index = blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
-                    // Propose the new block
-                    let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
-                    let new_block = blockchain.propose_block(
-                        hash_chain_index.hash_chain_index, my_address, next_seed);
-                    // Add the new block to the chain
-                    blockchain.chain.push(new_block.clone());
-                    // Execute the new block
-                    blockchain.execute_block(new_block.clone());
-                    // Broadcast the new block
-                    let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
-                    swarm.behaviour_mut().gossipsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes());
+                info!("Epoch: {}", blockchain.epoch.timestamp);
+                if blockchain.epoch.timestamp == 1 {
+                    let new_epoch = blockchain.new_epoch();
+                    //select block proposer for the new epoch
+                    let proposer = blockchain.select_block_proposer(new_epoch);
+                    if proposer.address == blockchain.wallet.get_public_key().to_string() {
+                        info!("I am the proposer for the new epoch");
+                        // Pull the hash chain index for the new block
+                        let hash_chain_index = blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
+                        // Propose the new block
+                        let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
+                        let new_block = blockchain.propose_block(hash_chain_index.hash_chain_index, my_address, new_epoch);
+                        // Add the new block to the chain
+                        blockchain.chain.push(new_block.clone());
+                        // Execute the new block
+                        blockchain.execute_block(new_block.clone());
+                        // Broadcast the new block
+                        let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
+                        swarm.behaviour_mut().gossipsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes()).unwrap();
+                    }
+
+                }
+                else if (blockchain.epoch.timestamp % EPOCH_DURATION) != 0 {
+                    let next_seed = blockchain.get_next_seed();
+                    let proposer = blockchain.select_block_proposer(next_seed);
+                    if proposer.address == blockchain.wallet.get_public_key().to_string() {
+                        info!("I am the proposer for the new epoch");
+                        // Pull the hash chain index for the new block
+                        let hash_chain_index = blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
+                        // Propose the new block
+                        let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
+                        let new_block = blockchain.propose_block(
+                            hash_chain_index.hash_chain_index, my_address, next_seed);
+                        // Add the new block to the chain
+                        blockchain.chain.push(new_block.clone());
+                        // Execute the new block
+                        blockchain.execute_block(new_block.clone());
+                        // Broadcast the new block
+                        let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
+                        swarm.behaviour_mut().gossipsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes()).unwrap();
                     }
                 }
             }
@@ -188,7 +212,7 @@ async fn main() {
                 let hash_chain = HashChain::new();
                 blockchain.lock().unwrap().hash_chain = hash_chain.clone();
                 let json = serde_json::to_string(&hash_chain).unwrap();
-                swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
+                swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes()).unwrap();
             }   
         }
     }

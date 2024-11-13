@@ -155,10 +155,8 @@ impl AppBehaviour {
     fn process_message(&mut self, data: &[u8], source: PeerId, blockchain: Arc<Mutex<Blockchain>>) {
         let mut blockchain = blockchain.lock().unwrap();
 
-        // Try deserializing as Genesis
         if let Ok(genesis) = bincode::deserialize::<Genesis>(data) {
             info!("Received genesis message from {:?}", source);
-            // Add the validator to the validator set
             let account = Account {
                 address: genesis.stake_txn.recipient.address.clone(),
             };
@@ -167,20 +165,13 @@ impl AppBehaviour {
                 .add_validator(account.clone(), genesis.stake_txn.clone())
                 .unwrap();
             info!("Added validator {:?}", result);
-            // Update the validator commitment
-            blockchain.validator.update_validator_com(account, genesis.hash_chain_com);
-            // Show the validators
-            let validators = blockchain.get_validators();
-            info!("Validators: {:?}", validators);
         }
-        // Try deserializing as ChainResponse
         else if let Ok(resp) = serde_json::from_slice::<ChainResponse>(data) {
             if resp.from_peer_id == PEER_ID.to_string() {
                 info!("Received chain from {:?}", source);
                 // Handle the ChainResponse
             }
         }
-        // Try deserializing as ChainRequest
         else if let Ok(req) = serde_json::from_slice::<ChainRequest>(data) {
             info!("Received chain request from {:?}", source);
             info!("Sending the chain and mempool to {:?}", source);
@@ -189,7 +180,6 @@ impl AppBehaviour {
                 // TODO: send the chain and mempool
             }
         }
-        // Try deserializing as Transaction
         else if let Ok(txn) = serde_json::from_slice::<Transaction>(data) {
             info!("Received a new transaction from {:?}", source);
             if txn.verify().unwrap() && !blockchain.mempool.txn_exists(&txn.hash) {
@@ -234,7 +224,11 @@ impl AppBehaviour {
                 },
                 msg,
             );
-            // Check if it received the hash chain from all validators
+           
+        }
+        // Try deserializing as String
+        else if let Ok(msg) = serde_json::from_slice::<String>(data) {
+            // Start Mining
             info!("Checking if the hash chain is complete");
             if blockchain.validator.hash_chain_received() {
                 let seed = blockchain.new_epoch();
@@ -266,15 +260,11 @@ impl AppBehaviour {
                         let json =
                             serde_json::to_string(&new_block).expect("Failed to serialize block");
                         if let Err(e) = self.gossipsub.publish(BLOCK_TOPIC.clone(), json.into_bytes()) {
-                            eprintln!("Failed to publish block: {}", e);
+                                    eprintln!("Failed to publish block: {}", e);
                         }
-                    }
+                    }   
                 }
             }
-        }
-        // Try deserializing as String
-        else if let Ok(msg) = serde_json::from_slice::<String>(data) {
-            info!("Received a simple string from {:?}: {:?}", source, msg);
         } else {
             info!("Received an unknown message from {:?}: {:?}", source, data);
         }
