@@ -51,7 +51,7 @@ impl Blockchain {
             validator: Validator::new(),
             epoch: Epoch::new(),
             buffer: Buffer::new(),
-            hash_chain: HashChain::new(),
+            hash_chain: HashChain { hash_chain: vec![] },
         };
         let wallet = &mut blockchain.wallet;
         // fun the account as the first validator
@@ -66,11 +66,6 @@ impl Blockchain {
             TransactionType::STAKE
         ).unwrap()).unwrap();
         blockchain.fund_wallet(10000.00);
-        // First hash chain message
-        let hash_chain = HashChain::new();
-        blockchain.hash_chain = hash_chain;
-        let hash_chain_message = blockchain.hash_chain.get_hash(EPOCH_DURATION as usize);
-        blockchain.validator.update_validator_com(account, hash_chain_message);
         blockchain
     }
 

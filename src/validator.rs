@@ -40,7 +40,11 @@ impl Validator {
     // }
 
     pub fn get_validator_commitment(&self, account: Account) -> &HashChainMessage {
-        self.hash_chain_com.get(&account.address).unwrap()
+        if let Some(hash_chain_message) = self.hash_chain_com.get(&account.address) {
+            hash_chain_message
+        } else {
+            panic!("Hash chain message not found for account: {:?}", account.address);
+        }
     }
 
     pub fn update_validator_com(&mut self, account: Account, com: HashChainMessage) {

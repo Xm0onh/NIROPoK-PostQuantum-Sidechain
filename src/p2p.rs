@@ -226,6 +226,14 @@ impl AppBehaviour {
                 },
                 msg,
             );
+            // check the commitment
+            let commitment = blockchain.validator.get_validator_commitment(Account {
+                address: source.to_string(),
+            });
+            info!("Commitment: {:?}", commitment);
+            info!("Account: {:?}", Account {
+                address: source.to_string(),
+            });
            
         }
         // Try deserializing as String
