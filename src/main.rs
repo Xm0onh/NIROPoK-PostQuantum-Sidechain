@@ -150,11 +150,12 @@ async fn main() {
 
             EventType::Epoch => {
                 info!("New Epoch");
+                let mut blockchain: std::sync::MutexGuard<'_, Blockchain> = blockchain.lock().unwrap();
+                let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
                 let hash_chain = HashChain::new();
-                let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize);
+                let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize, my_address);
                 let json = serde_json::to_string(&hash_chain_message).unwrap();
                 swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes()).unwrap();
-                let mut blockchain = blockchain.lock().unwrap();
                 blockchain.epoch.progress();
                 blockchain.hash_chain = hash_chain.clone();
                 info!("Epoch: {}", blockchain.epoch.timestamp);
@@ -173,7 +174,7 @@ async fn main() {
                     if proposer.address == blockchain.wallet.get_public_key().to_string() {
                         info!("I am the proposer for the new epoch");
                         // Pull the hash chain index for the new block
-                        let hash_chain_index = blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
+                        let hash_chain_index = blockchain.hash_chain.get_hash(EPOCH_DURATION as usize - blockchain.epoch.timestamp as usize + 1, proposer.clone());
                         let txns = vec![];
                         // Propose the new block
                         let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
@@ -192,7 +193,7 @@ async fn main() {
                     if proposer.address == blockchain.wallet.get_public_key().to_string() {
                         info!("I am the proposer for the new epoch");
                         // Pull the hash chain index for the new block
-                        let hash_chain_index = blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
+                        let hash_chain_index = blockchain.hash_chain.get_hash(EPOCH_DURATION as usize - blockchain.epoch.timestamp as usize + 1, proposer.clone());
                         // Propose the new block
                         let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
                         let txns = vec![];

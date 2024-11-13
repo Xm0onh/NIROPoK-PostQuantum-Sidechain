@@ -46,7 +46,7 @@ pub fn select_block_proposer(seed: Seed, validator: &Validator) -> &Account {
         hasher.update(seed.get_seed());
         
         if let Some(hash_value) = validator.hash_chain_com.get(&account.address) {
-            info!("hash chain index: {:?}", hash_value);
+            // info!("hash chain index: {:?}", hash_value);
             let result = hasher.update(hash_value.hash_chain_index.as_bytes());
             info!("result: {:?}", result);
             let hash_result = hasher.finalize();

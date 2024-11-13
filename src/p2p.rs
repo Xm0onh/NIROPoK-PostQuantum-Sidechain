@@ -218,23 +218,16 @@ impl AppBehaviour {
         }
         // Try deserializing as HashChainMessage
         else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(data) {
-            info!("Received a hash chain message from {:?}: {:?}", source, msg);
+            // info!("Received a hash chain message from {:?}", msg.sender);
             Validator::update_validator_com(
                 &mut blockchain.validator,
                 Account {
-                    address: source.to_string(),
+                    address: msg.sender.address.clone(),
                 },
-                msg,
+                msg.clone(),
             );
-            // check the commitment
-            let commitment = blockchain.validator.get_validator_commitment(Account {
-                address: source.to_string(),
-            });
-            info!("Commitment: {:?}", commitment);
-            info!("Account: {:?}", Account {
-                address: source.to_string(),
-            });
-           
+            // received commitment
+            info!("Receivedrom {:?}", msg.hash_chain_index);
         }
         // Try deserializing as String
         else if let Ok(msg) = serde_json::from_slice::<String>(data) {
