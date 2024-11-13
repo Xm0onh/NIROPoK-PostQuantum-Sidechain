@@ -30,7 +30,9 @@ impl Seed {
 pub fn get_block_seed(proposer_hash: String, prev_seed: [u8; 32]) -> Seed {
     let mut seed = vec![0u8; 32];
     for (i, byte) in proposer_hash.as_bytes().iter().enumerate() {
-        seed[i] = *byte ^ prev_seed[i];
+        if i < 32 {
+            seed[i] = *byte ^ prev_seed[i];
+        }
     }
     Seed { seed: seed.try_into().unwrap() }
 }

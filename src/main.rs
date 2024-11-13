@@ -173,11 +173,10 @@ async fn main() {
                         info!("I am the proposer for the new epoch");
                         // Pull the hash chain index for the new block
                         let hash_chain_index = blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
+                        let txns = vec![];
                         // Propose the new block
                         let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
-                        let new_block = blockchain.propose_block(hash_chain_index.hash_chain_index, my_address, new_epoch);
-                        // Add the new block to the chain
-                        blockchain.chain.push(new_block.clone());
+                        let new_block = blockchain.propose_block(hash_chain_index.hash_chain_index, my_address, txns, new_epoch);
                         // Execute the new block
                         blockchain.execute_block(new_block.clone());
                         // Broadcast the new block
@@ -195,8 +194,9 @@ async fn main() {
                         let hash_chain_index = blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
                         // Propose the new block
                         let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
+                        let txns = vec![];
                         let new_block = blockchain.propose_block(
-                            hash_chain_index.hash_chain_index, my_address, next_seed);
+                            hash_chain_index.hash_chain_index, my_address, txns, next_seed);
                         // Add the new block to the chain
                         blockchain.chain.push(new_block.clone());
                         // Execute the new block

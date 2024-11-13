@@ -204,7 +204,7 @@ impl AppBehaviour {
                     eprintln!("Failed to publish block: {}", e);
                 }
                 blockchain.execute_block(block.clone());
-
+                info!("Executed block {:?}", block.id);
                 // Progress the epoch
                 blockchain.epoch.progress();
 
@@ -212,6 +212,8 @@ impl AppBehaviour {
                 if blockchain.epoch.is_end_of_epoch() {
                     blockchain.end_of_epoch();
                 }
+            } else if blockchain.block_exists(block.clone()) {
+                info!("Block {:?} already exists", block.id);
             }
         }
         // Try deserializing as HashChainMessage
@@ -229,42 +231,6 @@ impl AppBehaviour {
         // Try deserializing as String
         else if let Ok(msg) = serde_json::from_slice::<String>(data) {
             // Start Mining
-            info!("Checking if the hash chain is complete");
-            if blockchain.validator.hash_chain_received() {
-                let seed = blockchain.new_epoch();
-                let proposer = blockchain.select_block_proposer(seed);
-                if proposer.address == blockchain.wallet.get_public_key().to_string() {
-                    info!("I am the proposer for the new epoch");
-                    blockchain.epoch.progress();
-                    let next_seed = blockchain.get_next_seed();
-                    let proposer = blockchain.select_block_proposer(next_seed);
-                    if proposer.address == blockchain.wallet.get_public_key().to_string() {
-                        info!("I am the proposer for the new epoch");
-                        // Pull the hash chain index for the new block
-                        let hash_chain_index =
-                            blockchain.hash_chain.get_hash(blockchain.epoch.timestamp as usize);
-                        // Propose the new block
-                        let my_address = Account {
-                            address: blockchain.wallet.get_public_key().to_string(),
-                        };
-                        let new_block = blockchain.propose_block(
-                            hash_chain_index.hash_chain_index,
-                            my_address,
-                            next_seed,
-                        );
-                        // Add the new block to the chain
-                        blockchain.chain.push(new_block.clone());
-                        // Execute the new block
-                        blockchain.execute_block(new_block.clone());
-                        // Broadcast the new block
-                        let json =
-                            serde_json::to_string(&new_block).expect("Failed to serialize block");
-                        if let Err(e) = self.gossipsub.publish(BLOCK_TOPIC.clone(), json.into_bytes()) {
-                                    eprintln!("Failed to publish block: {}", e);
-                        }
-                    }   
-                }
-            }
         } else {
             info!("Received an unknown message from {:?}: {:?}", source, data);
         }

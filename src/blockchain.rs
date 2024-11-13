@@ -7,7 +7,7 @@ use crate::transaction::{Transaction, TransactionType};
 use crate::utils::{Seed, select_block_proposer, get_block_seed};
 use crate::epoch::Epoch;
 use crate::hashchain::{HashChain, verify_hash_chain_index};
-
+use log::info;
 #[allow(unused_imports)]
 use crate::config::EPOCH_DURATION;
 
@@ -114,26 +114,50 @@ impl Blockchain {
     // fn handle_unstake(&mut self, transaction: Transaction) {}
     
     pub fn get_next_seed(&self) -> Seed {
-        let latest_block = self.chain.last().unwrap();
-        get_block_seed(latest_block.proposer_hash.clone(), latest_block.seed.get_seed())
+        let latest_block = self.chain.last();
+        if let Some(block) = latest_block {
+            get_block_seed(block.proposer_hash.clone(), block.seed.get_seed())
+        } else {
+            // print the error
+            info!("No blocks in the chain");
+            Seed::new_epoch_seed(&self.validator)
+        }
     }
 
-    pub fn propose_block(&mut self, proposer_hash: String, proposer_address: Account, seed: Seed ) -> Block {
-        let latest_block = self.chain.last().unwrap();
-        let block = Block::new(
-            latest_block.id + 1, 
-            latest_block.hash, 
-            latest_block.timestamp, 
-            latest_block.txn.clone(), 
-            proposer_address, 
-            proposer_hash, 
-            seed
-        ).unwrap();
-        block
+    pub fn propose_block(&mut self, proposer_hash: String, proposer_address: Account, txns: Vec<Transaction>, seed: Seed ) -> Block {
+        // If the chain is empty, we need to create the first block
+        if self.chain.is_empty() {
+            let block = Block::new(
+                0, 
+                [0; 32], 
+                self.epoch.timestamp as usize, 
+                vec![], 
+                proposer_address, 
+                proposer_hash, 
+                seed
+            ).unwrap();
+            block
+        } else {
+            let latest_block = self.chain.last().unwrap();
+            let block = Block::new(
+                latest_block.id + 1, 
+                latest_block.hash, 
+                latest_block.timestamp, 
+                txns, 
+                proposer_address, 
+                proposer_hash, 
+                seed
+            ).unwrap();
+            block
+        }
     }
 
 
     pub fn verify_block(&mut self, block: Block) -> Result<bool, String> {
+        // check if this is the genesis block
+        if block.id == 0 {
+            return Ok(true);
+        }
         let previous_block = self.chain.last().unwrap();
         if block.previous_hash != previous_block.hash {
             return Err("Previous block hash does not match".to_string());
@@ -148,6 +172,12 @@ impl Blockchain {
     }
     
     pub fn execute_block(&mut self, block: Block) {
+        // if txns, do nothing
+        if block.txn.is_empty() {
+            info!("Block has no transactions");
+            self.chain.push(block.clone());
+            return;
+        }
         for txn in block.txn.clone() {
             if txn.verify().unwrap() {
                 self.handle_transaction(txn);

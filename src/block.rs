@@ -46,6 +46,9 @@ impl Block {
     }
 
     fn compute_merkle_root(&self) -> [u8; 32] {
+        if self.txn.is_empty() {
+            return [0u8; 32];
+        }
         let leaves: Vec<[u8; 32]> = self.txn
         .iter()
         .map(|tx| tx.hash.clone())
