@@ -43,7 +43,7 @@ impl Buffer {
 
 impl Blockchain {
     pub fn new(wallet: Wallet) -> Self {
-        Self {
+        let mut blockchain = Self {
             chain: vec![],
             mempool: Mempool::new(),
             wallet,
@@ -52,7 +52,26 @@ impl Blockchain {
             epoch: Epoch::new(),
             buffer: Buffer::new(),
             hash_chain: HashChain::new(),
-        }
+        };
+        let wallet = &mut blockchain.wallet;
+        // fun the account as the first validator
+        let account = Account { address: wallet.get_public_key().to_string() };
+
+        blockchain.validator.add_validator(account.clone(), Transaction::new(
+            wallet,
+            account.clone(),
+            account.clone(),
+            100.00,
+            0,
+            TransactionType::STAKE
+        ).unwrap()).unwrap();
+        blockchain.fund_wallet(10000.00);
+        // First hash chain message
+        let hash_chain = HashChain::new();
+        blockchain.hash_chain = hash_chain;
+        let hash_chain_message = blockchain.hash_chain.get_hash(EPOCH_DURATION as usize);
+        blockchain.validator.update_validator_com(account, hash_chain_message);
+        blockchain
     }
 
     pub fn select_block_proposer(&self, seed: Seed) -> &Account {
@@ -140,15 +159,13 @@ impl Blockchain {
         }
     }
 
-    // pub fn get_validator(&self) -> &Validator {
-    //     &self.validator
-    // }
+    pub fn get_validators(&self) -> &Validator {
+        &self.validator
+    }
 
     pub fn block_exists(&self, block: Block) -> bool {
         self.chain.iter().any(|b| b.id == block.id)
     }
-
-    
 
 
     // Just a function for testing - funding the wallet

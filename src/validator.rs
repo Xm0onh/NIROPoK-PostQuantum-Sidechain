@@ -4,6 +4,8 @@ use crate::accounts::{Account, State};
 use crate::transaction::{Transaction, TransactionType};
 use crate::hashchain::HashChainMessage;
 use crate::config::STAKING_AMOUNT;
+
+#[derive(Debug)]
 pub struct Validator {
     pub state: State,
     pub hash_chain_com: HashMap<String, HashChainMessage>,

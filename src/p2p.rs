@@ -162,10 +162,16 @@ impl AppBehaviour {
             let account = Account {
                 address: genesis.stake_txn.recipient.address.clone(),
             };
-            blockchain
+            let result = blockchain
                 .validator
-                .add_validator(account, genesis.stake_txn.clone())
+                .add_validator(account.clone(), genesis.stake_txn.clone())
                 .unwrap();
+            info!("Added validator {:?}", result);
+            // Update the validator commitment
+            blockchain.validator.update_validator_com(account, genesis.hash_chain_com);
+            // Show the validators
+            let validators = blockchain.get_validators();
+            info!("Validators: {:?}", validators);
         }
         // Try deserializing as ChainResponse
         else if let Ok(resp) = serde_json::from_slice::<ChainResponse>(data) {

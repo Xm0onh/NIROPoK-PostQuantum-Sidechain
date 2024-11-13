@@ -48,9 +48,7 @@ async fn main() {
 
     let wallet = wallet::Wallet::new().unwrap();
     let blockchain = Arc::new(Mutex::new(Blockchain::new(wallet)));
-    // Lock the blockchain once
-
-
+        
     let behavior = p2p::AppBehaviour::new().await;
     let transport = libp2p::tokio_development_transport(p2p::KEYS.clone()).expect("Failed to create transport");
 
@@ -123,7 +121,6 @@ async fn main() {
 
             EventType::Genesis => {
                 let mut blockchain_guard = blockchain.lock().unwrap();
-                blockchain_guard.fund_wallet(10000.00);
                 info!("Genesis event");
                 let hash_chain = HashChain::new();
                 let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize);
@@ -132,13 +129,12 @@ async fn main() {
                 let wallet = &mut blockchain_guard.wallet;
                 let public_key_str = wallet.get_public_key().to_string();
                 let account = Account { address: public_key_str.clone() };
-            
                 // Create the transaction
                 let stake_txn = Transaction::new(
                     wallet,
                     account.clone(),
                     account.clone(),
-                    1000.00,
+                    100.00,
                     0,
                     TransactionType::STAKE
                 ).unwrap();
@@ -152,13 +148,6 @@ async fn main() {
                 drop(blockchain_guard);
                 let test = swarm.behaviour_mut().gossipsub.publish(p2p::GENESIS_TOPIC.clone(), serialized);
                 info!("test: {:?}", test);
-                // info!("New Epoch");
-                // let hash_chain = HashChain::new();
-                // let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize);
-                // let json = serde_json::to_string(&hash_chain_message).unwrap();
-                // swarm.behaviour_mut().floodsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
-
-            
             }
 
             EventType::Epoch => {
@@ -166,7 +155,7 @@ async fn main() {
                 let hash_chain = HashChain::new();
                 let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize);
                 let json = serde_json::to_string(&hash_chain_message).unwrap();
-                swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes());
+                swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes()).unwrap();
             }
 
             EventType::Mining => {
