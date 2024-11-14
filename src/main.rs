@@ -33,7 +33,6 @@ mod genesis;
 
 use blockchain::Blockchain;
 use hashchain::HashChain;
-use hashchain::HashChainMessage;
 use hashchain::HashChainCom;
 use config::*;
 use transaction::{Transaction, TransactionType};

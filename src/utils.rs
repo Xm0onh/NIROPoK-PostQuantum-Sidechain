@@ -2,7 +2,6 @@ use crate::validator::Validator;
 use sha3::{Digest, Sha3_256};
 use crate::accounts::Account;
 use serde::{Serialize, Deserialize};
-use log::info;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Seed {
