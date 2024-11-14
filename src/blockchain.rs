@@ -7,7 +7,7 @@ use crate::transaction::{Transaction, TransactionType};
 use crate::utils::{Seed, select_block_proposer, get_block_seed};
 use crate::epoch::Epoch;
 use crate::hashchain::{HashChain, verify_hash_chain_index};
-use log::info;
+use log::{info, error, warn};
 #[allow(unused_imports)]
 use crate::config::EPOCH_DURATION;
 
@@ -54,9 +54,7 @@ impl Blockchain {
             hash_chain: HashChain { hash_chain: vec![] },
         };
         let wallet = &mut blockchain.wallet;
-        // fun the account as the first validator
         let account = Account { address: wallet.get_public_key().to_string() };
-
         blockchain.validator.add_validator(account.clone(), Transaction::new(
             wallet,
             account.clone(),
@@ -65,6 +63,7 @@ impl Blockchain {
             0,
             TransactionType::STAKE
         ).unwrap()).unwrap();
+        warn!("Size of validator: {:?}", blockchain.validator.state.accounts.len());
         blockchain.fund_wallet(10000.00);
         blockchain
     }
@@ -113,8 +112,7 @@ impl Blockchain {
         if let Some(block) = latest_block {
             get_block_seed(block.proposer_hash.clone(), block.seed.get_seed())
         } else {
-            // print the error
-            info!("No blocks in the chain");
+            error!("No blocks in the chain");
             Seed::new_epoch_seed(&self.validator)
         }
     }
@@ -123,7 +121,7 @@ impl Blockchain {
         // If the chain is empty, we need to create the first block
         if self.chain.is_empty() {
             let block = Block::new(
-                0, 
+                1, 
                 [0; 32], 
                 self.epoch.timestamp as usize, 
                 vec![], 
@@ -148,22 +146,28 @@ impl Blockchain {
     }
 
 
-    pub fn verify_block(&mut self, block: Block) -> Result<bool, String> {
-        // check if this is the genesis block
-        if block.id == 0 {
-            return Ok(true);
+    pub fn verify_block(&mut self, block: Block) -> bool {
+        if block.id == 1 {
+            return true;
         }
         let previous_block = self.chain.last().unwrap();
         if block.previous_hash != previous_block.hash {
-            return Err("Previous block hash does not match".to_string());
+            error!("Previous block hash does not match");
+        } else {
+            info!("[SUCCESS] Previous block hash matches");
         }
 
         let proposer_address = block.proposer_address;
         let proposer_commtiment = self.validator.get_validator_commitment(proposer_address);
-        if !verify_hash_chain_index(proposer_commtiment.hash_chain_index.clone(), self.epoch.timestamp, block.proposer_hash.clone()) {
-            return Err("Hash chain index does not match".to_string());
+        if !verify_hash_chain_index(
+            proposer_commtiment.hash_chain_index.clone(), 
+            self.epoch.timestamp, 
+            block.proposer_hash.clone()
+        ) {
+            error!("Hash chain index does not match");
+            return false;
         }
-        Ok(true)
+        true
     }
     
     pub fn execute_block(&mut self, block: Block) {
@@ -199,60 +203,79 @@ impl Blockchain {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     fn setup_blockchain() -> Blockchain {
-//         let wallet = Wallet::new().unwrap();
-//         Blockchain::new(wallet)
-//     }
+    fn setup_blockchain() -> Blockchain {
+        let wallet = Wallet::new().unwrap();
+        Blockchain::new(wallet)
+    }
 
-//     #[test]
-//     fn test_select_block_proposer() {
-//         let mut blockchain = setup_blockchain();
+    #[test]
+    fn test_select_block_proposer() {
+        let mut blockchain = setup_blockchain();
         
-//         let mut wallet1 = Wallet::new().unwrap();
-//         let validator1 = Account { address: wallet1.get_public_key()};
-//         let mut wallet2 = Wallet::new().unwrap();
-//         let validator2 = Account { address: wallet2.get_public_key() };
+        let mut wallet1 = Wallet::new().unwrap();
+        let validator1 = Account { address: wallet1.get_public_key()};
+        let mut wallet2 = Wallet::new().unwrap();
+        let validator2 = Account { address: wallet2.get_public_key() };
         
 
 
-//         let stake_txn1 = Transaction::new(
-//             &mut wallet1,
-//             validator1.clone(),
-//             validator1.clone(),
-//             100.0,
-//             0,
-//             TransactionType::STAKE,
-//             ).unwrap();
-//         let stake_txn2 = Transaction::new(
-//             &mut wallet2,
-//             validator2.clone(),
-//             validator2.clone(),
-//             200.0,
-//             0,
-//             TransactionType::STAKE,
-//             ).unwrap();
+        let stake_txn1 = Transaction::new(
+            &mut wallet1,
+            validator1.clone(),
+            validator1.clone(),
+            100.0,
+            0,
+            TransactionType::STAKE,
+            ).unwrap();
+        let stake_txn2 = Transaction::new(
+            &mut wallet2,
+            validator2.clone(),
+            validator2.clone(),
+            200.0,
+            0,
+            TransactionType::STAKE,
+            ).unwrap();
 
-//         blockchain.handle_stake(stake_txn1);
-//         blockchain.handle_stake(stake_txn2);
-//         blockchain.end_of_epoch();
-//         // Hash chain
-//         let hash_chain_validator1 = HashChain::new();
-//         let hash_chain_validator2 = HashChain::new();
+        blockchain.handle_stake(stake_txn1);
+        blockchain.handle_stake(stake_txn2);
+        blockchain.end_of_epoch();
+        // Hash chain
+        let hash_chain_validator1 = HashChain::new();
+        let hash_chain_validator2 = HashChain::new();
+        
+        let val1_account = Account { address: validator1.address.clone() };
+        let val2_account = Account { address: validator2.address.clone() };
 
-//         blockchain.validator.update_validator_com(validator1.clone(), hash_chain_validator1.get_hash(EPOCH_DURATION as usize));
-//         blockchain.validator.update_validator_com(validator2.clone(), hash_chain_validator2.get_hash(EPOCH_DURATION as usize));
+        blockchain.validator.update_validator_com(
+                val1_account.clone(), 
+            hash_chain_validator1.get_hash(
+                EPOCH_DURATION as usize, 
+                val1_account.clone()
+            )
+        );
+        blockchain.validator.update_validator_com(
+            val2_account.clone(), 
+            hash_chain_validator2.get_hash(
+                EPOCH_DURATION as usize, 
+                val2_account.clone()
+            )
+        );
 
-//         let seed = blockchain.new_epoch();
-//         let proposer = blockchain.select_block_proposer(seed);
-//         println!("Proposer: {}", proposer.address);
-//         assert!(
-//             proposer.address == validator1.address || 
-//             proposer.address == validator2.address
-//         );
-//     }
-// }
+        let seed = blockchain.new_epoch();
+        let proposer = blockchain.select_block_proposer(seed);
+        if proposer.address == validator1.address {
+            println!("Validator 1 is proposer");
+        } else if proposer.address == validator2.address {
+            println!("Validator 2 is proposer");
+        }
+        assert!(
+            proposer.address == validator1.address || 
+            proposer.address == validator2.address
+        );
+    }
+}
 

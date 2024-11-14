@@ -32,9 +32,10 @@ mod genesis;
 
 use blockchain::Blockchain;
 use hashchain::HashChain;
+use hashchain::HashChainMessage;
 use config::*;
 use transaction::{Transaction, TransactionType};
-use log::info;
+use log::{info, error, warn};
 use accounts::Account;
 use genesis::Genesis;
 
@@ -87,7 +88,7 @@ async fn main() {
         let mining_sender_clone = mining_sender.clone();
         planner.add(
         move || mining_sender_clone.send(true).expect("can't send mining event"),
-        periodic::Every::new(Duration::from_secs(1)),
+        periodic::Every::new(Duration::from_secs(BLOCK_INTERVAL)),
         );
     });
    
@@ -153,7 +154,14 @@ async fn main() {
                 let mut blockchain: std::sync::MutexGuard<'_, Blockchain> = blockchain.lock().unwrap();
                 let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
                 let hash_chain = HashChain::new();
-                let hash_chain_message =  hash_chain.get_hash(EPOCH_DURATION as usize, my_address);
+
+                // Commitment is the last hash in the hash chain
+                let commitment = hash_chain.hash_chain.last().unwrap();
+                let hash_chain_message = HashChainMessage {
+                    sender: my_address.clone(),
+                    hash_chain_index: commitment.clone()
+                };
+                blockchain.validator.update_validator_com(my_address.clone(), hash_chain_message.clone());
                 let json = serde_json::to_string(&hash_chain_message).unwrap();
                 swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes()).unwrap();
                 blockchain.epoch.progress();
@@ -169,18 +177,22 @@ async fn main() {
                 info!("Epoch: {}", blockchain.epoch.timestamp);
                 if blockchain.epoch.timestamp == 1 {
                     let new_epoch = blockchain.new_epoch();
-                    //select block proposer for the new epoch
                     let proposer = blockchain.select_block_proposer(new_epoch);
                     if proposer.address == blockchain.wallet.get_public_key().to_string() {
-                        info!("I am the proposer for the new epoch");
+                        info!("I am the proposer for the new block {:?}", blockchain.epoch.timestamp);
                         // Pull the hash chain index for the new block
-                        let hash_chain_index = blockchain.hash_chain.get_hash(EPOCH_DURATION as usize - blockchain.epoch.timestamp as usize + 1, proposer.clone());
+                        let hash_chain_index = blockchain.hash_chain.get_hash(
+                            EPOCH_DURATION as usize - blockchain.epoch.timestamp as usize, 
+                            proposer.clone()
+                        );
                         let txns = vec![];
                         // Propose the new block
                         let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
                         let new_block = blockchain.propose_block(hash_chain_index.hash_chain_index, my_address, txns, new_epoch);
                         // Execute the new block
                         blockchain.execute_block(new_block.clone());
+                        blockchain.epoch.progress();
+
                         // Broadcast the new block
                         let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
                         swarm.behaviour_mut().gossipsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes()).unwrap();
@@ -191,9 +203,13 @@ async fn main() {
                     let next_seed = blockchain.get_next_seed();
                     let proposer = blockchain.select_block_proposer(next_seed);
                     if proposer.address == blockchain.wallet.get_public_key().to_string() {
-                        info!("I am the proposer for the new epoch");
+                        let latest_block = blockchain.chain.last().unwrap();
+                        info!("I am the proposer for the new block index {:?}", latest_block.id + 1);
                         // Pull the hash chain index for the new block
-                        let hash_chain_index = blockchain.hash_chain.get_hash(EPOCH_DURATION as usize - blockchain.epoch.timestamp as usize + 1, proposer.clone());
+                        let hash_chain_index = blockchain.hash_chain.get_hash(
+                            EPOCH_DURATION as usize - blockchain.epoch.timestamp as usize + 1, 
+                            proposer.clone()
+                        );
                         // Propose the new block
                         let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
                         let txns = vec![];
@@ -203,6 +219,7 @@ async fn main() {
                         blockchain.chain.push(new_block.clone());
                         // Execute the new block
                         blockchain.execute_block(new_block.clone());
+                        blockchain.epoch.progress();
                         // Broadcast the new block
                         let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
                         swarm.behaviour_mut().gossipsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes()).unwrap();

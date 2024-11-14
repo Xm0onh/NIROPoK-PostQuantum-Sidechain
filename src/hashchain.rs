@@ -27,7 +27,7 @@ impl HashChain {
         let initial_hash_hex: String = hex::encode(&initial_hash);
         hash_chain.push(initial_hash_hex);
        
-        for i in 0..EPOCH_DURATION {
+        for i in 0..EPOCH_DURATION + 1 {
             let last_hash_bytes = hex::decode(hash_chain.last().unwrap()).expect("Invalid hex string");
 
             // Create a new hasher and hash the last hash

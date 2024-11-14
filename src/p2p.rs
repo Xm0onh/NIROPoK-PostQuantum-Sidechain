@@ -15,6 +15,7 @@ use libp2p::{
         IdentTopic as Topic,
         MessageAuthenticity,
         MessageId,
+        
     },
     identity,
     mdns::{tokio::Behaviour as Mdns, Event as MdnsEvent},
@@ -26,7 +27,7 @@ use serde::{Serialize, Deserialize};
 use once_cell::sync::Lazy;
 use serde_json;
 use std::sync::{Arc, Mutex};
-use log::info;
+use log::{info, warn};
 
 pub static KEYS: Lazy<identity::Keypair> = Lazy::new(|| identity::Keypair::generate_ed25519());
 pub static PEER_ID: Lazy<PeerId> = Lazy::new(|| PeerId::from_public_key(&KEYS.public()));
@@ -165,7 +166,10 @@ impl AppBehaviour {
                 .add_validator(account.clone(), genesis.stake_txn.clone())
                 .unwrap();
             info!("Added validator {:?}", result);
+            warn!("Size of validator: {:?}", blockchain.validator.state.accounts.len());
         }
+
+
         else if let Ok(resp) = serde_json::from_slice::<ChainResponse>(data) {
             if resp.from_peer_id == PEER_ID.to_string() {
                 info!("Received chain from {:?}", source);
@@ -197,23 +201,19 @@ impl AppBehaviour {
         // Try deserializing as Block
         else if let Ok(block) = serde_json::from_slice::<Block>(data) {
             info!("Received a block from {:?}", source);
-            if blockchain.verify_block(block.clone()).unwrap() && !blockchain.block_exists(block.clone()) {
-                // Relay the block to other peers
-                let json = serde_json::to_string(&block).expect("Failed to serialize block");
-                if let Err(e) = self.gossipsub.publish(BLOCK_TOPIC.clone(), json.into_bytes()) {
-                    eprintln!("Failed to publish block: {}", e);
-                }
+            if blockchain.verify_block(block.clone()) && !blockchain.block_exists(block.clone()) {
                 blockchain.execute_block(block.clone());
                 info!("Executed block {:?}", block.id);
                 // Progress the epoch
-                blockchain.epoch.progress();
-
-                // Check if it is the end of the epoch
-                if blockchain.epoch.is_end_of_epoch() {
-                    blockchain.end_of_epoch();
-                }
+                
             } else if blockchain.block_exists(block.clone()) {
                 info!("Block {:?} already exists", block.id);
+            }
+            blockchain.epoch.progress();
+
+            // Check if it is the end of the epoch
+            if blockchain.epoch.is_end_of_epoch() {
+                blockchain.end_of_epoch();
             }
         }
         // Try deserializing as HashChainMessage

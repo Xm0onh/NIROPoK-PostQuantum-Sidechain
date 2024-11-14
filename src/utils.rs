@@ -33,12 +33,17 @@ pub fn get_block_seed(proposer_hash: String, prev_seed: [u8; 32]) -> Seed {
             seed[i] = *byte ^ prev_seed[i];
         }
     }
+    info!("Seed: {:?}", seed);
     Seed { seed: seed.try_into().unwrap() }
 }
 
 pub fn select_block_proposer(seed: Seed, validator: &Validator) -> &Account {
     let n: f64 = 1e9;
     let mut weights = vec![0f64; validator.state.accounts.len()];
+    info!("Len of weights: {:?}", weights.len());
+    for account in validator.state.accounts.iter() {
+        info!("Commitment: {:?}", validator.hash_chain_com.get(&account.address).unwrap().hash_chain_index);
+    }
     let mut proposer = &validator.state.accounts[0];
     
     for (i, account) in validator.state.accounts.iter().enumerate() {
@@ -46,7 +51,7 @@ pub fn select_block_proposer(seed: Seed, validator: &Validator) -> &Account {
         hasher.update(seed.get_seed());
         
         if let Some(hash_value) = validator.hash_chain_com.get(&account.address) {
-            // info!("hash chain index: {:?}", hash_value);
+            info!("hash chain index: {:?}", hash_value.hash_chain_index);
             let result = hasher.update(hash_value.hash_chain_index.as_bytes());
             info!("result: {:?}", result);
             let hash_result = hasher.finalize();
@@ -63,6 +68,7 @@ pub fn select_block_proposer(seed: Seed, validator: &Validator) -> &Account {
 
     let mut lowest_weight = f64::INFINITY;
     for (i, weight) in weights.iter().enumerate() {
+        info!("weight: {:?}", *weight);
         if *weight < lowest_weight {
             lowest_weight = *weight;
             proposer = &validator.state.accounts[i];
