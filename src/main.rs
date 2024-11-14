@@ -225,6 +225,12 @@ async fn main() {
                         swarm.behaviour_mut().gossipsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes()).unwrap();
                     }
                 }
+                else if (blockchain.epoch.is_end_of_epoch() || blockchain.epoch.timestamp == 0) {
+                    info!("End of Epoch");
+                    blockchain.end_of_epoch();
+                    let epoch_sender_clone = epoch_sender.clone();
+                    epoch_sender_clone.send(true).expect("can't send epoch event");
+                }
             }
             EventType::HashChain => {
                 
