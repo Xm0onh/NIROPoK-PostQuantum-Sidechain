@@ -3,16 +3,23 @@ use rand::Rng;
 use crate::config::EPOCH_DURATION;
 use crate::accounts::Account;
 use serde::{Serialize, Deserialize};
-
+use log::info;
 #[derive(Debug,Serialize, Deserialize, Clone)]
 pub struct HashChain {
     pub hash_chain: Vec<String>
 }
 
 #[derive(Debug,Serialize, Deserialize, Clone)]
-pub struct HashChainMessage {
+pub struct HashChainCom {
     pub hash_chain_index: String,
     pub sender: Account
+}
+
+#[derive(Debug,Serialize, Deserialize, Clone)]
+pub struct HashChainMessage {
+    pub hash: String,
+    pub sender: Account,
+    pub epoch: usize
 }
 
 impl HashChain {
@@ -45,8 +52,8 @@ impl HashChain {
         HashChain { hash_chain }
     }
 
-    pub fn get_hash(&self, index: usize, sender: Account) -> HashChainMessage {
-        HashChainMessage { hash_chain_index: self.hash_chain[index].clone(), sender: sender }
+    pub fn get_hash(&self, index: usize, sender: Account) -> HashChainCom {
+        HashChainCom { hash_chain_index: self.hash_chain[index].clone(), sender: sender }
     }
 }
 
@@ -66,7 +73,5 @@ pub fn verify_hash_chain_index(
     }
 
     let computed_commitment = hex::encode(&current_hash_bytes);
-
-
     computed_commitment == commitment
 }

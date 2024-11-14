@@ -2,13 +2,14 @@
 use std::collections::HashMap;
 use crate::accounts::{Account, State};
 use crate::transaction::{Transaction, TransactionType};
-use crate::hashchain::HashChainMessage;
+use crate::hashchain::{HashChainCom, HashChain};
 use crate::config::STAKING_AMOUNT;
 
 #[derive(Debug)]
 pub struct Validator {
     pub state: State,
-    pub hash_chain_com: HashMap<String, HashChainMessage>,
+    pub hash_chain_com: HashMap<String, HashChainCom>,
+    pub next_block_hash: HashMap<Account, String>,
 }
 
 impl Validator {
@@ -16,6 +17,7 @@ impl Validator {
         Self {
             state: State::new(),
             hash_chain_com: HashMap::new(),
+            next_block_hash: HashMap::new(),
         }
     }
 
@@ -39,7 +41,7 @@ impl Validator {
     //     Ok(true)
     // }
 
-    pub fn get_validator_commitment(&self, account: Account) -> &HashChainMessage {
+    pub fn get_validator_commitment(&self, account: Account) -> &HashChainCom {
         if let Some(hash_chain_message) = self.hash_chain_com.get(&account.address) {
             hash_chain_message
         } else {
@@ -47,7 +49,7 @@ impl Validator {
         }
     }
 
-    pub fn update_validator_com(&mut self, account: Account, com: HashChainMessage) {
+    pub fn update_validator_com(&mut self, account: Account, com: HashChainCom) {
         self.hash_chain_com.insert(account.address, com);
     }
 

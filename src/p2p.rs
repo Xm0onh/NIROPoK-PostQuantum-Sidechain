@@ -1,10 +1,11 @@
 use crate::transaction::Transaction;
 use crate::block::Block;
 use crate::blockchain::Blockchain;
-use crate::hashchain::HashChainMessage;
+use crate::hashchain::{HashChainCom, HashChainMessage, verify_hash_chain_index};
 use crate::accounts::Account;
 use crate::validator::Validator;
 use crate::genesis::Genesis;
+use log::error;
 use libp2p::{
     gossipsub::{
         Behaviour,
@@ -35,6 +36,7 @@ pub static CHAIN_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("chains"));
 pub static BLOCK_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("blocks"));
 pub static TRANSACTION_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("transactions"));
 pub static HASH_CHAIN_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("hash_chains"));
+pub static HASH_CHAIN_MESSAGE_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("hash_chain_messages"));
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChainRequest {
@@ -125,7 +127,7 @@ impl AppBehaviour {
         behaviour.gossipsub.subscribe(&BLOCK_TOPIC).unwrap();
         behaviour.gossipsub.subscribe(&TRANSACTION_TOPIC).unwrap();
         behaviour.gossipsub.subscribe(&HASH_CHAIN_TOPIC).unwrap();
-
+        behaviour.gossipsub.subscribe(&HASH_CHAIN_MESSAGE_TOPIC).unwrap();
         behaviour
     }
     pub fn handle_event(&mut self, event: P2PEvent, blockchain: Arc<Mutex<Blockchain>>) {
@@ -214,8 +216,8 @@ impl AppBehaviour {
                 blockchain.end_of_epoch();
             }
         }
-        // Try deserializing as HashChainMessage
-        else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(data) {
+        // Try deserializing as HashChainCom
+        else if let Ok(msg) = serde_json::from_slice::<HashChainCom>(data) {
             // info!("Received a hash chain message from {:?}", msg.sender);
             Validator::update_validator_com(
                 &mut blockchain.validator,
@@ -226,6 +228,22 @@ impl AppBehaviour {
             );
             // received commitment
             info!("Receivedrom {:?}", msg.hash_chain_index);
+        }
+        else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(data) {
+            let validator_commitment = blockchain.validator.get_validator_commitment(msg.sender.clone());
+            let received_commitment = msg.hash.clone();
+            if verify_hash_chain_index(
+                validator_commitment.hash_chain_index.clone(), 
+                msg.epoch as u64, 
+                received_commitment.clone()
+            ) {
+                info!("Received valid hash chain message");
+                blockchain.validator.next_block_hash.insert(msg.sender.clone(), msg.hash.clone());
+            } else {
+                error!("Received invalid hash chain message from");
+                error!("Validator commitment: {}", validator_commitment.hash_chain_index);
+                error!("Received commitment: {}", received_commitment);
+            }
         }
        else {
             info!("Received an unknown message from {:?}: {:?}", source, data);

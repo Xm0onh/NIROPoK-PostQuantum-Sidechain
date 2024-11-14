@@ -33,6 +33,7 @@ mod genesis;
 use blockchain::Blockchain;
 use hashchain::HashChain;
 use hashchain::HashChainMessage;
+use hashchain::HashChainCom;
 use config::*;
 use transaction::{Transaction, TransactionType};
 use log::{info};
@@ -157,10 +158,11 @@ async fn main() {
 
                 // Commitment is the last hash in the hash chain
                 let commitment = hash_chain.hash_chain.last().unwrap();
-                let hash_chain_message = HashChainMessage {
-                    sender: my_address.clone(),
-                    hash_chain_index: commitment.clone()
+                let hash_chain_message = HashChainCom {
+                    hash_chain_index: commitment.clone(),
+                    sender: my_address.clone()
                 };
+                
                 blockchain.validator.update_validator_com(my_address.clone(), hash_chain_message.clone());
                 let json = serde_json::to_string(&hash_chain_message).unwrap();
                 swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_TOPIC.clone(), json.as_bytes()).unwrap();
@@ -175,6 +177,20 @@ async fn main() {
                 
                 let mut blockchain = blockchain.lock().unwrap();
                 info!("Epoch: {}", blockchain.epoch.timestamp);
+                
+                let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
+                let hash_chain_index = blockchain.hash_chain.get_hash(
+                    (EPOCH_DURATION as usize + 1) - (blockchain.epoch.timestamp as usize), 
+                    my_address.clone()
+                );
+                let epoch_hash_chain_message = HashChainMessage {
+                    hash: hash_chain_index.hash_chain_index.clone(),
+                    sender: my_address.clone(),
+                    epoch: blockchain.epoch.timestamp as usize
+                };
+                let json = serde_json::to_string(&epoch_hash_chain_message).unwrap();
+                swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_MESSAGE_TOPIC.clone(), json.as_bytes()).unwrap();
+
                 if blockchain.epoch.timestamp == 1 {
                     let new_epoch = blockchain.new_epoch();
                     handle_block_proposal(&mut blockchain, new_epoch, &mut swarm);
