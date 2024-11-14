@@ -3,7 +3,7 @@ use rand::Rng;
 use crate::config::EPOCH_DURATION;
 use crate::accounts::Account;
 use serde::{Serialize, Deserialize};
-use log::info;
+
 #[derive(Debug,Serialize, Deserialize, Clone)]
 pub struct HashChain {
     pub hash_chain: Vec<String>
@@ -55,11 +55,6 @@ pub fn verify_hash_chain_index(
     index: u64,
     received_hash: String,
 ) -> bool {
-    info!(
-        "Verifying hash chain index: {} at index {}",
-        received_hash, EPOCH_DURATION - index
-    );
-
     // Decode the received hash from hex to bytes
     let mut current_hash_bytes = hex::decode(&received_hash).expect("Invalid hex string");
 
@@ -68,16 +63,9 @@ pub fn verify_hash_chain_index(
         let mut hasher = Sha3_256::new();
         hasher.update(&current_hash_bytes);
         current_hash_bytes = hasher.finalize().to_vec();
-
-        info!("Computed hash: {}", hex::encode(&current_hash_bytes));
     }
 
-    // After hashing, current_hash_bytes should match the commitment
     let computed_commitment = hex::encode(&current_hash_bytes);
-
-    info!("Final computed commitment: {}", computed_commitment);
-    // expected commitment
-    info!("Expected commitment: {}", commitment);
 
 
     computed_commitment == commitment
