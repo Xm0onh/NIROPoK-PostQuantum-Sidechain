@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 use crate::accounts::{Account, State};
 use crate::transaction::{Transaction, TransactionType};
-use crate::hashchain::{HashChainCom, HashChain};
+use crate::hashchain::HashChainCom;
 use crate::config::STAKING_AMOUNT;
 
 #[derive(Debug)]

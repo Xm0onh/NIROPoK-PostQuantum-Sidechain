@@ -14,6 +14,7 @@ use std::{
     time::Duration,
 };
 use futures::stream::StreamExt;
+use colored::*;
 
 mod wallet;
 mod transaction;
@@ -178,18 +179,19 @@ async fn main() {
                 let mut blockchain = blockchain.lock().unwrap();
                 info!("Epoch: {}", blockchain.epoch.timestamp);
                 
-                let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
-                let hash_chain_index = blockchain.hash_chain.get_hash(
-                    (EPOCH_DURATION as usize + 1) - (blockchain.epoch.timestamp as usize), 
-                    my_address.clone()
-                );
-                let epoch_hash_chain_message = HashChainMessage {
-                    hash: hash_chain_index.hash_chain_index.clone(),
-                    sender: my_address.clone(),
-                    epoch: blockchain.epoch.timestamp as usize
-                };
-                let json = serde_json::to_string(&epoch_hash_chain_message).unwrap();
-                swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_MESSAGE_TOPIC.clone(), json.as_bytes()).unwrap();
+                // let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
+                // let hash_chain_index = blockchain.hash_chain.get_hash(
+                //     (EPOCH_DURATION as usize + 1) - (blockchain.epoch.timestamp as usize), 
+                //     my_address.clone()
+                // );
+                // let epoch_hash_chain_message = HashChainMessage {
+                //     hash: hash_chain_index.hash_chain_index.clone(),
+                //     sender: my_address.clone(),
+                //     epoch: blockchain.epoch.timestamp as usize
+                // };
+                // let json = serde_json::to_string(&epoch_hash_chain_message).unwrap();
+                // swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_MESSAGE_TOPIC.clone(), json.as_bytes()).unwrap();
+
 
                 if blockchain.epoch.timestamp == 1 {
                     let new_epoch = blockchain.new_epoch();
@@ -218,7 +220,7 @@ async fn main() {
 pub fn handle_block_proposal(blockchain: &mut Blockchain, seed: Seed, swarm: &mut libp2p::Swarm<p2p::AppBehaviour>) {
     let proposer = blockchain.select_block_proposer(seed);
     if proposer.address == blockchain.wallet.get_public_key().to_string() {
-        info!("I am the proposer for the new block {:?}", blockchain.epoch.timestamp);
+        info!("{}", format!("👷 I am the proposer for the new block {:?}",blockchain.get_latest_block_id()).bright_green());
         // Pull the hash chain index for the new block
         let hash_chain_index = blockchain.hash_chain.get_hash(
             EPOCH_DURATION as usize - blockchain.epoch.timestamp as usize + 1, 

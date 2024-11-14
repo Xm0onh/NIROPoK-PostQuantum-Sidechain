@@ -2,6 +2,8 @@ use crate::validator::Validator;
 use sha3::{Digest, Sha3_256};
 use crate::accounts::Account;
 use serde::{Serialize, Deserialize};
+use log::info;
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Seed {
     pub seed: [u8; 32],
@@ -43,7 +45,13 @@ pub fn select_block_proposer(seed: Seed, validator: &Validator) -> &Account {
     for (i, account) in validator.state.accounts.iter().enumerate() {
         let mut hasher = Sha3_256::new();
         hasher.update(seed.get_seed());
-        
+        // validator hash chain commitment
+        // info!("Validator hash chain commitment: {:?}", validator.hash_chain_com.get(&account.address).unwrap().hash_chain_index);
+        // info!("Validator latest epoch hash: {:?}", validator.next_block_hash.get(&account));
+        // let mut hash_value = &validator.hash_chain_com.get(&account.address).unwrap().hash_chain_index;
+        // if validator.next_block_hash.get(&account).is_some() {
+        //     hash_value = validator.next_block_hash.get(&account).unwrap();
+        // }
         if let Some(hash_value) = validator.hash_chain_com.get(&account.address) {
             hasher.update(hash_value.hash_chain_index.as_bytes());
             let hash_result = hasher.finalize();

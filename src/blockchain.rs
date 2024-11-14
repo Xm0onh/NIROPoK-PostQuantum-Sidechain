@@ -197,6 +197,13 @@ impl Blockchain {
         self.chain.iter().any(|b| b.id == block.id)
     }
 
+    pub fn get_latest_block_id(&self) -> u64 {
+        if self.chain.is_empty() {
+            1
+        } else {
+            self.chain.last().unwrap().id as u64
+        }
+    }
 
     // Just a function for testing - funding the wallet
     pub fn fund_wallet(&mut self, amount: f64) {

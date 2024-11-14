@@ -15,10 +15,6 @@ impl Epoch {
         self.timestamp += 1;
     }
 
-    pub fn current_epoch(&self) -> u64 {
-        self.timestamp
-    }
-
     pub fn reset(&mut self) {
         self.timestamp = 0;
     }

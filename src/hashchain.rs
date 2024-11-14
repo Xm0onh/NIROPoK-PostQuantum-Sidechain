@@ -3,7 +3,6 @@ use rand::Rng;
 use crate::config::EPOCH_DURATION;
 use crate::accounts::Account;
 use serde::{Serialize, Deserialize};
-use log::info;
 #[derive(Debug,Serialize, Deserialize, Clone)]
 pub struct HashChain {
     pub hash_chain: Vec<String>
