@@ -182,7 +182,7 @@ async fn main() {
                         info!("I am the proposer for the new block {:?}", blockchain.epoch.timestamp);
                         // Pull the hash chain index for the new block
                         let hash_chain_index = blockchain.hash_chain.get_hash(
-                            EPOCH_DURATION as usize - blockchain.epoch.timestamp as usize, 
+                            EPOCH_DURATION as usize - blockchain.epoch.timestamp as usize + 1, 
                             proposer.clone()
                         );
                         let txns = vec![];
@@ -192,7 +192,6 @@ async fn main() {
                         // Execute the new block
                         blockchain.execute_block(new_block.clone());
                         blockchain.epoch.progress();
-
                         // Broadcast the new block
                         let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
                         swarm.behaviour_mut().gossipsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes()).unwrap();
@@ -220,12 +219,15 @@ async fn main() {
                         // Execute the new block
                         blockchain.execute_block(new_block.clone());
                         blockchain.epoch.progress();
+                        if blockchain.epoch.is_end_of_epoch() {
+                            blockchain.end_of_epoch();
+                        }
                         // Broadcast the new block
                         let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
                         swarm.behaviour_mut().gossipsub.publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes()).unwrap();
                     }
                 }
-                else if (blockchain.epoch.is_end_of_epoch() || blockchain.epoch.timestamp == 0) {
+                else if blockchain.epoch.is_end_of_epoch() || blockchain.epoch.timestamp == 0 {
                     info!("End of Epoch");
                     blockchain.end_of_epoch();
                     let epoch_sender_clone = epoch_sender.clone();
