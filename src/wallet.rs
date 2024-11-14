@@ -1,5 +1,5 @@
 use crystals_dilithium::dilithium2::{Keypair, Signature};
-
+use rand::Rng;
 use serde::{Deserialize, Serialize, Deserializer, Serializer};
 
 pub struct Wallet {
@@ -40,7 +40,8 @@ impl std::fmt::Debug for Wallet {
 #[allow(dead_code)]
 impl Wallet {
     pub fn new() -> Result<Self, String> {
-        let seed = [0u8; 32]; // Define a seed with 32 bytes
+        
+        let seed = rand::thread_rng().gen::<[u8; 32]>();
         let keypair = Keypair::generate(Some(&seed));
         Ok(Self{
             keypair,
