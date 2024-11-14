@@ -4,7 +4,7 @@ use sha3::{Digest, Sha3_256};
 use crate::wallet::Wallet;
 use chrono::Utc;
 use crate::accounts::Account;
-use log::info;
+
 // Custom serialization for Signature
 fn serialize_signature<S>(signature: &Signature, serializer: S) -> Result<S::Ok, S::Error>
 where

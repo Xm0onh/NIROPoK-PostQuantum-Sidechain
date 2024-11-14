@@ -56,6 +56,7 @@ impl Validator {
         self.hash_chain_com.clear();
     }
 
+    #[allow(dead_code)]
     pub fn hash_chain_received(&self) -> bool {
         self.hash_chain_com.len() == self.state.accounts.len()
     }

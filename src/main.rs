@@ -35,7 +35,7 @@ use hashchain::HashChain;
 use hashchain::HashChainMessage;
 use config::*;
 use transaction::{Transaction, TransactionType};
-use log::{info, error, warn};
+use log::{info};
 use accounts::Account;
 use genesis::Genesis;
 
@@ -102,7 +102,7 @@ async fn main() {
         event = swarm.select_next_some() => {
             match event {
                 SwarmEvent::Behaviour(e) => {
-                    let mut behaviour = swarm.behaviour_mut();
+                    let behaviour = swarm.behaviour_mut();
                     behaviour.handle_event(e, Arc::clone(&blockchain));
                     None
                 }

@@ -14,8 +14,6 @@ use libp2p::{
         Event,
         IdentTopic as Topic,
         MessageAuthenticity,
-        MessageId,
-        
     },
     identity,
     mdns::{tokio::Behaviour as Mdns, Event as MdnsEvent},
@@ -229,10 +227,7 @@ impl AppBehaviour {
             // received commitment
             info!("Receivedrom {:?}", msg.hash_chain_index);
         }
-        // Try deserializing as String
-        else if let Ok(msg) = serde_json::from_slice::<String>(data) {
-            // Start Mining
-        } else {
+       else {
             info!("Received an unknown message from {:?}: {:?}", source, data);
         }
     }

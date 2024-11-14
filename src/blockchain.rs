@@ -188,6 +188,7 @@ impl Blockchain {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_validators(&self) -> &Validator {
         &self.validator
     }
