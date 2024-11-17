@@ -33,6 +33,7 @@ pub enum TransactionType {
     RESIGN,
     VALIDATOR,
     ValidatorReward,
+    COMMIT,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
