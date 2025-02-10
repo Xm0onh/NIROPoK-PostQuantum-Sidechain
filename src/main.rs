@@ -29,7 +29,7 @@ mod config;
 mod utils;
 mod epoch;
 mod genesis;
-
+mod ccok;
 
 use blockchain::Blockchain;
 use hashchain::HashChain;
