@@ -1,5 +1,5 @@
 use crate::transaction::Transaction;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mempool {
     pub transactions: Vec<Transaction>,
@@ -7,7 +7,9 @@ pub struct Mempool {
 
 impl Mempool {
     pub fn new() -> Self {
-        Mempool { transactions: Vec::new() }
+        Mempool {
+            transactions: Vec::new(),
+        }
     }
 
     pub fn add_transaction(&mut self, txn: Transaction) {
@@ -31,6 +33,4 @@ impl Mempool {
     pub fn clear(&mut self) {
         self.transactions.clear();
     }
-
-
 }

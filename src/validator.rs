@@ -1,9 +1,8 @@
-
-use std::collections::HashMap;
 use crate::accounts::{Account, State};
-use crate::transaction::{Transaction, TransactionType};
-use crate::hashchain::HashChainCom;
 use crate::config::STAKING_AMOUNT;
+use crate::hashchain::HashChainCom;
+use crate::transaction::{Transaction, TransactionType};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Validator {
@@ -32,7 +31,8 @@ impl Validator {
     pub fn apply_buffer(&mut self, accounts: Vec<Account>, txns: Vec<Transaction>) {
         // update the list of validators by calling add_validator for each account
         for (i, account) in accounts.iter().enumerate() {
-            self.add_validator(account.clone(), txns.get(i).unwrap().clone()).unwrap();
+            self.add_validator(account.clone(), txns.get(i).unwrap().clone())
+                .unwrap();
         }
     }
 
@@ -45,7 +45,10 @@ impl Validator {
         if let Some(hash_chain_message) = self.hash_chain_com.get(&account.address) {
             hash_chain_message
         } else {
-            panic!("Hash chain message not found for account: {:?}", account.address);
+            panic!(
+                "Hash chain message not found for account: {:?}",
+                account.address
+            );
         }
     }
 

@@ -1,32 +1,27 @@
-use crate::transaction::Transaction;
+use crate::accounts::Account;
 use crate::block::Block;
 use crate::blockchain::Blockchain;
-use crate::hashchain::{HashChainCom, HashChainMessage, verify_hash_chain_index};
-use crate::accounts::Account;
-use crate::validator::Validator;
 use crate::genesis::Genesis;
-use log::error;
+use crate::hashchain::{verify_hash_chain_index, HashChainCom, HashChainMessage};
+use crate::transaction::Transaction;
+use crate::validator::Validator;
 use libp2p::{
     gossipsub::{
-        Behaviour,
-        ConfigBuilder,
-        PeerScoreParams,
+        Behaviour, ConfigBuilder, Event, IdentTopic as Topic, MessageAuthenticity, PeerScoreParams,
         PeerScoreThresholds,
-        Event,
-        IdentTopic as Topic,
-        MessageAuthenticity,
     },
     identity,
     mdns::{tokio::Behaviour as Mdns, Event as MdnsEvent},
     swarm::NetworkBehaviour,
     PeerId,
 };
+use log::error;
 
-use serde::{Serialize, Deserialize};
+use log::{info, warn};
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use std::sync::{Arc, Mutex};
-use log::{info, warn};
 
 pub static KEYS: Lazy<identity::Keypair> = Lazy::new(|| identity::Keypair::generate_ed25519());
 pub static PEER_ID: Lazy<PeerId> = Lazy::new(|| PeerId::from_public_key(&KEYS.public()));
@@ -107,18 +102,17 @@ impl AppBehaviour {
             ..Default::default()
         };
 
-        let mut gossipsub = Behaviour::new(
-            MessageAuthenticity::Signed(KEYS.clone()),
-            gossipsub_config,
-        )
-        .expect("Failed to create Gossipsub behaviour with peer scoring");
-        
-        gossipsub.with_peer_score(peer_score_params, peer_score_thresholds).expect("Failed to set peer scoring");
+        let mut gossipsub =
+            Behaviour::new(MessageAuthenticity::Signed(KEYS.clone()), gossipsub_config)
+                .expect("Failed to create Gossipsub behaviour with peer scoring");
+
+        gossipsub
+            .with_peer_score(peer_score_params, peer_score_thresholds)
+            .expect("Failed to set peer scoring");
 
         let mut behaviour = Self {
             gossipsub,
-            mdns: Mdns::new(Default::default(), *PEER_ID)
-                .expect("Failed to create mDNS behaviour"),
+            mdns: Mdns::new(Default::default(), *PEER_ID).expect("Failed to create mDNS behaviour"),
         };
 
         info!("Subscribing to topics...");
@@ -127,7 +121,10 @@ impl AppBehaviour {
         behaviour.gossipsub.subscribe(&BLOCK_TOPIC).unwrap();
         behaviour.gossipsub.subscribe(&TRANSACTION_TOPIC).unwrap();
         behaviour.gossipsub.subscribe(&HASH_CHAIN_TOPIC).unwrap();
-        behaviour.gossipsub.subscribe(&HASH_CHAIN_MESSAGE_TOPIC).unwrap();
+        behaviour
+            .gossipsub
+            .subscribe(&HASH_CHAIN_MESSAGE_TOPIC)
+            .unwrap();
         behaviour
     }
     pub fn handle_event(&mut self, event: P2PEvent, blockchain: Arc<Mutex<Blockchain>>) {
@@ -137,13 +134,13 @@ impl AppBehaviour {
         }
     }
 
-    fn handle_gossipsub_event(
-        &mut self,
-        event: Event,
-        blockchain: Arc<Mutex<Blockchain>>,
-    ) {
+    fn handle_gossipsub_event(&mut self, event: Event, blockchain: Arc<Mutex<Blockchain>>) {
         match event {
-            Event::Message { propagation_source, message_id: _, message } => {
+            Event::Message {
+                propagation_source,
+                message_id: _,
+                message,
+            } => {
                 let data = &message.data;
                 let source = message.source.unwrap_or(propagation_source);
                 self.process_message(data, source, blockchain);
@@ -151,7 +148,6 @@ impl AppBehaviour {
             _ => {}
         }
     }
-    
 
     fn process_message(&mut self, data: &[u8], source: PeerId, blockchain: Arc<Mutex<Blockchain>>) {
         let mut blockchain = blockchain.lock().unwrap();
@@ -166,25 +162,23 @@ impl AppBehaviour {
                 .add_validator(account.clone(), genesis.stake_txn.clone())
                 .unwrap();
             info!("Added validator {:?}", result);
-            warn!("Size of validator: {:?}", blockchain.validator.state.accounts.len());
-        }
-
-
-        else if let Ok(resp) = serde_json::from_slice::<ChainResponse>(data) {
+            warn!(
+                "Size of validator: {:?}",
+                blockchain.validator.state.accounts.len()
+            );
+        } else if let Ok(resp) = serde_json::from_slice::<ChainResponse>(data) {
             if resp.from_peer_id == PEER_ID.to_string() {
                 info!("Received chain from {:?}", source);
                 // Handle the ChainResponse
             }
-        }
-        else if let Ok(req) = serde_json::from_slice::<ChainRequest>(data) {
+        } else if let Ok(req) = serde_json::from_slice::<ChainRequest>(data) {
             info!("Received chain request from {:?}", source);
             info!("Sending the chain and mempool to {:?}", source);
             let peer_id = req.from_peer_id;
             if peer_id == *PEER_ID {
                 // TODO: send the chain and mempool
             }
-        }
-        else if let Ok(txn) = serde_json::from_slice::<Transaction>(data) {
+        } else if let Ok(txn) = serde_json::from_slice::<Transaction>(data) {
             info!("Received a new transaction from {:?}", source);
             if txn.verify().unwrap() && !blockchain.mempool.txn_exists(&txn.hash) {
                 blockchain.mempool.add_transaction(txn.clone());
@@ -205,7 +199,6 @@ impl AppBehaviour {
                 blockchain.execute_block(block.clone());
                 info!("Executed block {:?}", block.id);
                 // Progress the epoch
-                
             } else if blockchain.block_exists(block.clone()) {
                 info!("Block {:?} already exists", block.id);
             }
@@ -228,24 +221,30 @@ impl AppBehaviour {
             );
             // received commitment
             info!("Receivedrom {:?}", msg.hash_chain_index);
-        }
-        else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(data) {
-            let validator_commitment = blockchain.validator.get_validator_commitment(msg.sender.clone());
+        } else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(data) {
+            let validator_commitment = blockchain
+                .validator
+                .get_validator_commitment(msg.sender.clone());
             let received_commitment = msg.hash.clone();
             if verify_hash_chain_index(
-                validator_commitment.hash_chain_index.clone(), 
-                msg.epoch as u64, 
-                received_commitment.clone()
+                validator_commitment.hash_chain_index.clone(),
+                msg.epoch as u64,
+                received_commitment.clone(),
             ) {
                 info!("Received valid hash chain message");
-                blockchain.validator.next_block_hash.insert(msg.sender.clone(), msg.hash.clone());
+                blockchain
+                    .validator
+                    .next_block_hash
+                    .insert(msg.sender.clone(), msg.hash.clone());
             } else {
                 error!("Received invalid hash chain message from");
-                error!("Validator commitment: {}", validator_commitment.hash_chain_index);
+                error!(
+                    "Validator commitment: {}",
+                    validator_commitment.hash_chain_index
+                );
                 error!("Received commitment: {}", received_commitment);
             }
-        }
-       else {
+        } else {
             info!("Received an unknown message from {:?}: {:?}", source, data);
         }
     }
@@ -256,7 +255,6 @@ impl AppBehaviour {
                 for (peer_id, addr) in discovered_list {
                     self.gossipsub.add_explicit_peer(&peer_id); // Gossipsub handles peer connections automatically
                     info!("Discovered new peer: {:?}, addr: {:?}", peer_id, addr);
-
                 }
             }
             MdnsEvent::Expired(expired_list) => {

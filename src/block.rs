@@ -1,9 +1,9 @@
-use crate::transaction::Transaction;
-use serde::{Serialize, Deserialize};
-use rs_merkle::{Hasher, MerkleTree};
-use sha3::{Digest, Sha3_256};
-use crate::utils::Seed;
 use crate::accounts::Account;
+use crate::transaction::Transaction;
+use crate::utils::Seed;
+use rs_merkle::{Hasher, MerkleTree};
+use serde::{Deserialize, Serialize};
+use sha3::{Digest, Sha3_256};
 #[derive(Clone)]
 #[allow(dead_code)]
 struct Sha3Hasher;
@@ -30,8 +30,16 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(id: usize, previous_hash: [u8; 32], timestamp: usize, txn: Vec<Transaction>, proposer_address: Account, proposer_hash: String, seed: Seed) -> Result<Self, String> {
-        let mut block = Self { 
+    pub fn new(
+        id: usize,
+        previous_hash: [u8; 32],
+        timestamp: usize,
+        txn: Vec<Transaction>,
+        proposer_address: Account,
+        proposer_hash: String,
+        seed: Seed,
+    ) -> Result<Self, String> {
+        let mut block = Self {
             id,
             hash: [0u8; 32],
             previous_hash,
@@ -49,10 +57,7 @@ impl Block {
         if self.txn.is_empty() {
             return [0u8; 32];
         }
-        let leaves: Vec<[u8; 32]> = self.txn
-        .iter()
-        .map(|tx| tx.hash.clone())
-        .collect();
+        let leaves: Vec<[u8; 32]> = self.txn.iter().map(|tx| tx.hash.clone()).collect();
         let tree = MerkleTree::<Sha3Hasher>::from_leaves(&leaves);
         tree.root().unwrap()
     }

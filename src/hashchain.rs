@@ -1,24 +1,24 @@
-use sha3::{Digest, Sha3_256};
-use rand::Rng;
-use crate::config::EPOCH_DURATION;
 use crate::accounts::Account;
-use serde::{Serialize, Deserialize};
-#[derive(Debug,Serialize, Deserialize, Clone)]
+use crate::config::EPOCH_DURATION;
+use rand::Rng;
+use serde::{Deserialize, Serialize};
+use sha3::{Digest, Sha3_256};
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HashChain {
-    pub hash_chain: Vec<String>
+    pub hash_chain: Vec<String>,
 }
 
-#[derive(Debug,Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HashChainCom {
     pub hash_chain_index: String,
-    pub sender: Account
+    pub sender: Account,
 }
 
-#[derive(Debug,Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HashChainMessage {
     pub hash: String,
     pub sender: Account,
-    pub epoch: usize
+    pub epoch: usize,
 }
 
 impl HashChain {
@@ -28,39 +28,35 @@ impl HashChain {
 
         let nonce = rand::thread_rng().gen_range(0..u64::MAX);
         hasher.update(nonce.to_be_bytes());
-       
+
         let initial_hash = hasher.finalize();
         let initial_hash_hex: String = hex::encode(&initial_hash);
         hash_chain.push(initial_hash_hex);
-       
+
         for i in 0..EPOCH_DURATION + 1 {
-            let last_hash_bytes = hex::decode(hash_chain.last().unwrap()).expect("Invalid hex string");
+            let last_hash_bytes =
+                hex::decode(hash_chain.last().unwrap()).expect("Invalid hex string");
 
             // Create a new hasher and hash the last hash
             let mut hasher = Sha3_256::new();
             hasher.update(&last_hash_bytes);
             let current_hash = hasher.finalize();
             let current_hash_hex = hex::encode(&current_hash);
-            println!(
-                "Computed hash: {}, index {}",
-                current_hash_hex,
-                i
-            );
+            println!("Computed hash: {}, index {}", current_hash_hex, i);
             hash_chain.push(current_hash_hex);
-        };
+        }
         HashChain { hash_chain }
     }
 
     pub fn get_hash(&self, index: usize, sender: Account) -> HashChainCom {
-        HashChainCom { hash_chain_index: self.hash_chain[index].clone(), sender: sender }
+        HashChainCom {
+            hash_chain_index: self.hash_chain[index].clone(),
+            sender: sender,
+        }
     }
 }
 
-pub fn verify_hash_chain_index(
-    commitment: String,
-    index: u64,
-    received_hash: String,
-) -> bool {
+pub fn verify_hash_chain_index(commitment: String, index: u64, received_hash: String) -> bool {
     // Decode the received hash from hex to bytes
     let mut current_hash_bytes = hex::decode(&received_hash).expect("Invalid hex string");
 

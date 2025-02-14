@@ -3,14 +3,11 @@ pub struct Epoch {
     pub timestamp: u64,
 }
 
-
 impl Epoch {
     pub fn new() -> Self {
-        Self { 
-            timestamp: 0 
-        }
+        Self { timestamp: 0 }
     }
-    
+
     pub fn progress(&mut self) {
         self.timestamp += 1;
     }

@@ -1,7 +1,7 @@
-use crate::validator::Validator;
-use sha3::{Digest, Sha3_256};
 use crate::accounts::Account;
-use serde::{Serialize, Deserialize};
+use crate::validator::Validator;
+use serde::{Deserialize, Serialize};
+use sha3::{Digest, Sha3_256};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Seed {
@@ -18,7 +18,9 @@ impl Seed {
                 }
             }
         }
-        Seed { seed: seed.try_into().unwrap() }
+        Seed {
+            seed: seed.try_into().unwrap(),
+        }
     }
 
     pub fn get_seed(&self) -> [u8; 32] {
@@ -33,14 +35,16 @@ pub fn get_block_seed(proposer_hash: String, prev_seed: [u8; 32]) -> Seed {
             seed[i] = *byte ^ prev_seed[i];
         }
     }
-    Seed { seed: seed.try_into().unwrap() }
+    Seed {
+        seed: seed.try_into().unwrap(),
+    }
 }
 
 pub fn select_block_proposer(seed: Seed, validator: &Validator) -> &Account {
     let n: f64 = 1e9;
     let mut weights = vec![0f64; validator.state.accounts.len()];
     let mut proposer = &validator.state.accounts[0];
-    
+
     for (i, account) in validator.state.accounts.iter().enumerate() {
         let mut hasher = Sha3_256::new();
         hasher.update(seed.get_seed());
@@ -55,10 +59,16 @@ pub fn select_block_proposer(seed: Seed, validator: &Validator) -> &Account {
             hasher.update(hash_value.hash_chain_index.as_bytes());
             let hash_result = hasher.finalize();
             let numeric_value = u64::from_be_bytes([
-                hash_result[0], hash_result[1], hash_result[2], hash_result[3],
-                hash_result[4], hash_result[5], hash_result[6], hash_result[7]
+                hash_result[0],
+                hash_result[1],
+                hash_result[2],
+                hash_result[3],
+                hash_result[4],
+                hash_result[5],
+                hash_result[6],
+                hash_result[7],
             ]);
-            
+
             if let Some(balance) = validator.state.balances.get(&account) {
                 weights[i] = n - (numeric_value as f64 / balance);
             }
@@ -74,4 +84,3 @@ pub fn select_block_proposer(seed: Seed, validator: &Validator) -> &Account {
     }
     proposer
 }
-

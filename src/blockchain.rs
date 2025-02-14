@@ -1,15 +1,15 @@
-use crate::block::Block;
-use crate::mempool::Mempool;
 use crate::accounts::{Account, State};
-use crate::wallet::Wallet;
-use crate::validator::Validator;
-use crate::transaction::{Transaction, TransactionType};
-use crate::utils::{Seed, select_block_proposer, get_block_seed};
-use crate::epoch::Epoch;
-use crate::hashchain::{HashChain, verify_hash_chain_index};
-use log::{info, error, warn};
+use crate::block::Block;
 #[allow(unused_imports)]
 use crate::config::EPOCH_DURATION;
+use crate::epoch::Epoch;
+use crate::hashchain::{verify_hash_chain_index, HashChain};
+use crate::mempool::Mempool;
+use crate::transaction::{Transaction, TransactionType};
+use crate::utils::{get_block_seed, select_block_proposer, Seed};
+use crate::validator::Validator;
+use crate::wallet::Wallet;
+use log::{error, info, warn};
 
 pub struct Blockchain {
     pub chain: Vec<Block>,
@@ -54,16 +54,28 @@ impl Blockchain {
             hash_chain: HashChain { hash_chain: vec![] },
         };
         let wallet = &mut blockchain.wallet;
-        let account = Account { address: wallet.get_public_key().to_string() };
-        blockchain.validator.add_validator(account.clone(), Transaction::new(
-            wallet,
-            account.clone(),
-            account.clone(),
-            100.00,
-            0,
-            TransactionType::STAKE
-        ).unwrap()).unwrap();
-        warn!("Size of validator: {:?}", blockchain.validator.state.accounts.len());
+        let account = Account {
+            address: wallet.get_public_key().to_string(),
+        };
+        blockchain
+            .validator
+            .add_validator(
+                account.clone(),
+                Transaction::new(
+                    wallet,
+                    account.clone(),
+                    account.clone(),
+                    100.00,
+                    0,
+                    TransactionType::STAKE,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        warn!(
+            "Size of validator: {:?}",
+            blockchain.validator.state.accounts.len()
+        );
         blockchain.fund_wallet(10000.00);
         blockchain
     }
@@ -79,15 +91,18 @@ impl Blockchain {
     fn handle_transaction(&mut self, transaction: Transaction) {
         if transaction.txn_type == TransactionType::TRANSACTION {
             self.execute_transaction(transaction);
-        }
-        else if transaction.txn_type == TransactionType::STAKE {
+        } else if transaction.txn_type == TransactionType::STAKE {
             self.handle_stake(transaction);
         }
     }
 
     fn execute_transaction(&mut self, transaction: Transaction) {
         if transaction.verify().unwrap() {
-            self.state.transfer(transaction.sender.clone(), transaction.recipient.clone(), transaction.amount);
+            self.state.transfer(
+                transaction.sender.clone(),
+                transaction.recipient.clone(),
+                transaction.amount,
+            );
         }
     }
 
@@ -100,13 +115,14 @@ impl Blockchain {
     }
 
     pub fn end_of_epoch(&mut self) {
-        self.validator.apply_buffer(self.buffer.accounts.clone(), self.buffer.txns.clone());
+        self.validator
+            .apply_buffer(self.buffer.accounts.clone(), self.buffer.txns.clone());
         self.buffer.reset();
         self.epoch.reset();
     }
     // TODO
     // fn handle_unstake(&mut self, transaction: Transaction) {}
-    
+
     pub fn get_next_seed(&self) -> Seed {
         let latest_block = self.chain.last();
         if let Some(block) = latest_block {
@@ -117,34 +133,41 @@ impl Blockchain {
         }
     }
 
-    pub fn propose_block(&mut self, proposer_hash: String, proposer_address: Account, txns: Vec<Transaction>, seed: Seed ) -> Block {
+    pub fn propose_block(
+        &mut self,
+        proposer_hash: String,
+        proposer_address: Account,
+        txns: Vec<Transaction>,
+        seed: Seed,
+    ) -> Block {
         // If the chain is empty, we need to create the first block
         if self.chain.is_empty() {
             let block = Block::new(
-                1, 
-                [0; 32], 
-                self.epoch.timestamp as usize, 
-                vec![], 
-                proposer_address, 
-                proposer_hash, 
-                seed
-            ).unwrap();
+                1,
+                [0; 32],
+                self.epoch.timestamp as usize,
+                vec![],
+                proposer_address,
+                proposer_hash,
+                seed,
+            )
+            .unwrap();
             block
         } else {
             let latest_block = self.chain.last().unwrap();
             let block = Block::new(
-                latest_block.id + 1, 
-                latest_block.hash, 
-                latest_block.timestamp, 
-                txns, 
-                proposer_address, 
-                proposer_hash, 
-                seed
-            ).unwrap();
+                latest_block.id + 1,
+                latest_block.hash,
+                latest_block.timestamp,
+                txns,
+                proposer_address,
+                proposer_hash,
+                seed,
+            )
+            .unwrap();
             block
         }
     }
-
 
     pub fn verify_block(&mut self, block: Block) -> bool {
         if block.id == 1 {
@@ -160,16 +183,16 @@ impl Blockchain {
         let proposer_address = block.proposer_address;
         let proposer_commtiment = self.validator.get_validator_commitment(proposer_address);
         if !verify_hash_chain_index(
-            proposer_commtiment.hash_chain_index.clone(), 
-            self.epoch.timestamp, 
-            block.proposer_hash.clone()
+            proposer_commtiment.hash_chain_index.clone(),
+            self.epoch.timestamp,
+            block.proposer_hash.clone(),
         ) {
             error!("Hash chain index does not match");
             return false;
         }
         true
     }
-    
+
     pub fn execute_block(&mut self, block: Block) {
         // if txns, do nothing
         if block.txn.is_empty() {
@@ -207,7 +230,12 @@ impl Blockchain {
 
     // Just a function for testing - funding the wallet
     pub fn fund_wallet(&mut self, amount: f64) {
-        self.state.balances.insert(Account { address: self.wallet.get_public_key().to_string() }, amount);
+        self.state.balances.insert(
+            Account {
+                address: self.wallet.get_public_key().to_string(),
+            },
+            amount,
+        );
     }
 }
 
@@ -223,13 +251,15 @@ mod tests {
     #[test]
     fn test_select_block_proposer() {
         let mut blockchain = setup_blockchain();
-        
-        let mut wallet1 = Wallet::new().unwrap();
-        let validator1 = Account { address: wallet1.get_public_key()};
-        let mut wallet2 = Wallet::new().unwrap();
-        let validator2 = Account { address: wallet2.get_public_key() };
-        
 
+        let mut wallet1 = Wallet::new().unwrap();
+        let validator1 = Account {
+            address: wallet1.get_public_key(),
+        };
+        let mut wallet2 = Wallet::new().unwrap();
+        let validator2 = Account {
+            address: wallet2.get_public_key(),
+        };
 
         let stake_txn1 = Transaction::new(
             &mut wallet1,
@@ -238,7 +268,8 @@ mod tests {
             100.0,
             0,
             TransactionType::STAKE,
-            ).unwrap();
+        )
+        .unwrap();
         let stake_txn2 = Transaction::new(
             &mut wallet2,
             validator2.clone(),
@@ -246,7 +277,8 @@ mod tests {
             200.0,
             0,
             TransactionType::STAKE,
-            ).unwrap();
+        )
+        .unwrap();
 
         blockchain.handle_stake(stake_txn1);
         blockchain.handle_stake(stake_txn2);
@@ -254,23 +286,21 @@ mod tests {
         // Hash chain
         let hash_chain_validator1 = HashChain::new();
         let hash_chain_validator2 = HashChain::new();
-        
-        let val1_account = Account { address: validator1.address.clone() };
-        let val2_account = Account { address: validator2.address.clone() };
+
+        let val1_account = Account {
+            address: validator1.address.clone(),
+        };
+        let val2_account = Account {
+            address: validator2.address.clone(),
+        };
 
         blockchain.validator.update_validator_com(
-                val1_account.clone(), 
-            hash_chain_validator1.get_hash(
-                EPOCH_DURATION as usize, 
-                val1_account.clone()
-            )
+            val1_account.clone(),
+            hash_chain_validator1.get_hash(EPOCH_DURATION as usize, val1_account.clone()),
         );
         blockchain.validator.update_validator_com(
-            val2_account.clone(), 
-            hash_chain_validator2.get_hash(
-                EPOCH_DURATION as usize, 
-                val2_account.clone()
-            )
+            val2_account.clone(),
+            hash_chain_validator2.get_hash(EPOCH_DURATION as usize, val2_account.clone()),
         );
 
         let seed = blockchain.new_epoch();
@@ -280,10 +310,6 @@ mod tests {
         } else if proposer.address == validator2.address {
             println!("Validator 2 is proposer");
         }
-        assert!(
-            proposer.address == validator1.address || 
-            proposer.address == validator2.address
-        );
+        assert!(proposer.address == validator1.address || proposer.address == validator2.address);
     }
 }
-

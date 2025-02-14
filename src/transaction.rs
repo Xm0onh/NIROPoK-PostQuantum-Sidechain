@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize, Deserializer, Serializer};
-use crystals_dilithium::dilithium2::{PublicKey, Signature};
-use sha3::{Digest, Sha3_256};
+use crate::accounts::Account;
 use crate::wallet::Wallet;
 use chrono::Utc;
-use crate::accounts::Account;
+use crystals_dilithium::dilithium2::{PublicKey, Signature};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use sha3::{Digest, Sha3_256};
 
 // Custom serialization for Signature
 fn serialize_signature<S>(signature: &Signature, serializer: S) -> Result<S::Ok, S::Error>
@@ -53,11 +53,11 @@ pub struct Transaction {
 impl Transaction {
     pub fn new(
         sender_wallet: &mut Wallet,
-        sender: Account, 
-        recipient: Account, 
-        amount: f64, 
-        fee: usize, 
-        txn_type: TransactionType
+        sender: Account,
+        recipient: Account,
+        amount: f64,
+        fee: usize,
+        txn_type: TransactionType,
     ) -> Result<Self, String> {
         let timestamp = Utc::now().timestamp_millis() as usize;
         let mut txn = Self {
@@ -68,12 +68,11 @@ impl Transaction {
             amount,
             timestamp,
             fee,
-            txn_type
+            txn_type,
         };
         txn.hash = txn.compute_hash();
         txn.signature = sender_wallet.sign_message(&txn.hash);
         Ok(txn)
-
     }
 
     pub fn verify(&self) -> Result<bool, String> {
@@ -92,5 +91,4 @@ impl Transaction {
         hasher.update(serde_json::to_string(&self.txn_type).unwrap().as_bytes());
         hasher.finalize().into()
     }
-
 }

@@ -1,6 +1,6 @@
 use crystals_dilithium::dilithium2::{Keypair, Signature};
 use rand::Rng;
-use serde::{Deserialize, Serialize, Deserializer, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub struct Wallet {
     pub keypair: Keypair,
@@ -13,10 +13,10 @@ impl<'de> Deserialize<'de> for Wallet {
     {
         // Deserialize the keypair bytes first
         let bytes: Vec<u8> = Vec::deserialize(deserializer)?;
-        
+
         // Convert bytes back to Keypair
         Ok(Wallet {
-            keypair: Keypair::from_bytes(&bytes)
+            keypair: Keypair::from_bytes(&bytes),
         })
     }
 }
@@ -40,12 +40,9 @@ impl std::fmt::Debug for Wallet {
 #[allow(dead_code)]
 impl Wallet {
     pub fn new() -> Result<Self, String> {
-        
         let seed = rand::thread_rng().gen::<[u8; 32]>();
         let keypair = Keypair::generate(Some(&seed));
-        Ok(Self{
-            keypair,
-        })
+        Ok(Self { keypair })
     }
 
     pub fn sign_message(&self, msg: &[u8]) -> Signature {
@@ -64,4 +61,3 @@ impl Wallet {
         hex::encode(self.keypair.secret.to_bytes())
     }
 }
-

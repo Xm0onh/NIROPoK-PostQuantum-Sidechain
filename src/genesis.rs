@@ -1,5 +1,5 @@
 use crate::transaction::Transaction;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Genesis {
@@ -15,16 +15,18 @@ impl Genesis {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wallet::Wallet;
     use crate::accounts::Account;
     use crate::transaction::TransactionType;
+    use crate::wallet::Wallet;
 
     #[test]
     fn test_genesis_serialization() {
         // Create a new wallet for testing
         let mut wallet = Wallet::new().unwrap();
-        let account = Account { address: wallet.get_public_key().to_string() };
-        
+        let account = Account {
+            address: wallet.get_public_key().to_string(),
+        };
+
         // Create a stake transaction
         let stake_txn = Transaction::new(
             &mut wallet,
@@ -32,8 +34,9 @@ mod tests {
             account.clone(),
             1000.0,
             0,
-            TransactionType::STAKE
-        ).unwrap();
+            TransactionType::STAKE,
+        )
+        .unwrap();
 
         // Create a hash chain message
         // Create Genesis instance
@@ -48,8 +51,14 @@ mod tests {
         // Verify the data matches
         assert_eq!(deserialized.stake_txn.hash, genesis.stake_txn.hash);
         assert_eq!(deserialized.stake_txn.amount, genesis.stake_txn.amount);
-        assert_eq!(deserialized.stake_txn.sender.address, genesis.stake_txn.sender.address);
-        assert_eq!(deserialized.stake_txn.recipient.address, genesis.stake_txn.recipient.address);
+        assert_eq!(
+            deserialized.stake_txn.sender.address,
+            genesis.stake_txn.sender.address
+        );
+        assert_eq!(
+            deserialized.stake_txn.recipient.address,
+            genesis.stake_txn.recipient.address
+        );
         assert_eq!(deserialized.stake_txn.txn_type, genesis.stake_txn.txn_type);
     }
 }

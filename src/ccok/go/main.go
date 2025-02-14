@@ -10,8 +10,8 @@ import (
 )
 
 func main() {
-	// Seed math/rand for random weight generation
-	mrand.Seed(time.Now().UnixNano())
+	// Initialize local random generator
+	rng := mrand.New(mrand.NewSource(time.Now().UnixNano()))
 
 	// Number of participants
 	numParticipants := 10
@@ -32,7 +32,7 @@ func main() {
 		signers[i] = signer
 
 		// Assign a random weight in the range [10, 100]
-		weight := uint64(10 + mrand.Intn(91))
+		weight := uint64(10 + rng.Intn(91))
 		totalWeight += weight
 
 		participants[i] = Participant{

@@ -1,9 +1,9 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash, Eq)]
 pub struct Account {
-    pub address: String
+    pub address: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -14,7 +14,10 @@ pub struct State {
 
 impl State {
     pub fn new() -> Self {
-        State { accounts: Vec::new(), balances: HashMap::new() }
+        State {
+            accounts: Vec::new(),
+            balances: HashMap::new(),
+        }
     }
 
     pub fn add_account(&mut self, account: Account) {
