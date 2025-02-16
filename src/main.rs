@@ -69,7 +69,7 @@ async fn main() {
         .listen_on(listen_addr)
         .expect("Failed to listen on address");
 
-    // Send a genesis event after 1 second
+    // Genesis event is just a simple event for registering the first nodes and update the state for their stake value - it should change in the future
     let genesis_sender_clone = genesis_sender.clone();
     spawn(async move {
         sleep(Duration::from_secs(5)).await;
@@ -79,7 +79,6 @@ async fn main() {
             .expect("can't send genesis event");
     });
 
-    // Send an init event after 1 second
     let epoch_sender_clone = epoch_sender.clone();
     spawn(async move {
         sleep(Duration::from_secs(10)).await;
@@ -200,6 +199,12 @@ async fn main() {
                 }
 
                 EventType::Mining => {
+                    let peer_count = swarm.behaviour().gossipsub.all_peers().count();
+                    println!("peer_count: {}", peer_count);
+                    if peer_count < 3 {
+                        info!("Not enough nodes connected for block production, current peer count: {}", peer_count);
+                        continue;
+                    }
                     info!("mining event");
 
                     let mut blockchain = blockchain.lock().unwrap();
@@ -234,6 +239,7 @@ async fn main() {
                             .expect("can't send epoch event");
                     }
                 }
+
                 EventType::HashChain => {}
             }
         }
@@ -250,7 +256,7 @@ async fn main() {
                 "{}",
                 format!(
                     "👷 I am the proposer for the new block {:?}",
-                    blockchain.get_latest_block_id()
+                    blockchain.get_latest_block_id() + 1
                 )
                 .bright_green()
             );
