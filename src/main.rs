@@ -200,7 +200,6 @@ async fn main() {
 
                 EventType::Mining => {
                     let peer_count = swarm.behaviour().gossipsub.all_peers().count();
-                    println!("peer_count: {}", peer_count);
                     if peer_count < 3 {
                         info!("Not enough nodes connected for block production, current peer count: {}", peer_count);
                         continue;
@@ -209,19 +208,6 @@ async fn main() {
 
                     let mut blockchain = blockchain.lock().unwrap();
                     info!("Epoch: {}", blockchain.epoch.timestamp);
-
-                    // let my_address = Account { address: blockchain.wallet.get_public_key().to_string() };
-                    // let hash_chain_index = blockchain.hash_chain.get_hash(
-                    //     (EPOCH_DURATION as usize + 1) - (blockchain.epoch.timestamp as usize),
-                    //     my_address.clone()
-                    // );
-                    // let epoch_hash_chain_message = HashChainMessage {
-                    //     hash: hash_chain_index.hash_chain_index.clone(),
-                    //     sender: my_address.clone(),
-                    //     epoch: blockchain.epoch.timestamp as usize
-                    // };
-                    // let json = serde_json::to_string(&epoch_hash_chain_message).unwrap();
-                    // swarm.behaviour_mut().gossipsub.publish(p2p::HASH_CHAIN_MESSAGE_TOPIC.clone(), json.as_bytes()).unwrap();
 
                     if blockchain.epoch.timestamp == 1 {
                         let new_epoch = blockchain.new_epoch();
@@ -282,6 +268,8 @@ async fn main() {
                 .gossipsub
                 .publish(p2p::BLOCK_TOPIC.clone(), json.as_bytes())
                 .unwrap();
+
+            info!("📩 Block proposed: {:?}", new_block.id);
         }
     }
 }

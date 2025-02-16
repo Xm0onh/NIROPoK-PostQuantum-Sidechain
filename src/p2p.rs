@@ -17,6 +17,7 @@ use libp2p::{
 };
 use log::error;
 
+use hex;
 use log::{info, warn};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -32,6 +33,7 @@ pub static BLOCK_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("blocks"));
 pub static TRANSACTION_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("transactions"));
 pub static HASH_CHAIN_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("hash_chains"));
 pub static HASH_CHAIN_MESSAGE_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("hash_chain_messages"));
+pub static BLOCK_SIGNATURE_TOPIC: Lazy<Topic> = Lazy::new(|| Topic::new("block_signatures"));
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChainRequest {
@@ -79,6 +81,14 @@ impl From<MdnsEvent> for P2PEvent {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BlockSignature {
+    pub block_id: usize,
+    pub block_hash: String,
+    pub sender: Account,
+    pub signature: Vec<u8>,
+}
+
 impl AppBehaviour {
     pub async fn new() -> Self {
         let gossipsub_config = ConfigBuilder::default()
@@ -119,6 +129,10 @@ impl AppBehaviour {
         behaviour.gossipsub.subscribe(&GENESIS_TOPIC).unwrap();
         behaviour.gossipsub.subscribe(&CHAIN_TOPIC).unwrap();
         behaviour.gossipsub.subscribe(&BLOCK_TOPIC).unwrap();
+        behaviour
+            .gossipsub
+            .subscribe(&BLOCK_SIGNATURE_TOPIC)
+            .unwrap();
         behaviour.gossipsub.subscribe(&TRANSACTION_TOPIC).unwrap();
         behaviour.gossipsub.subscribe(&HASH_CHAIN_TOPIC).unwrap();
         behaviour
@@ -161,7 +175,10 @@ impl AppBehaviour {
                 .validator
                 .add_validator(account.clone(), genesis.stake_txn.clone())
                 .unwrap();
-            info!("Added validator {:?}", result);
+            info!(
+                "Added validator {:?}, with stake {:?}",
+                result, genesis.stake_txn.amount
+            );
             warn!(
                 "Size of validator: {:?}",
                 blockchain.validator.state.accounts.len()
@@ -178,6 +195,8 @@ impl AppBehaviour {
             if peer_id == *PEER_ID {
                 // TODO: send the chain and mempool
             }
+
+        // Receive a Transaction
         } else if let Ok(txn) = serde_json::from_slice::<Transaction>(data) {
             info!("Received a new transaction from {:?}", source);
             if txn.verify().unwrap() && !blockchain.mempool.txn_exists(&txn.hash) {
@@ -192,26 +211,52 @@ impl AppBehaviour {
                 }
             }
         }
-        // Try deserializing as Block
+        // Receive a Block
         else if let Ok(block) = serde_json::from_slice::<Block>(data) {
             info!("Received a block from {:?}", source);
-            if blockchain.verify_block(block.clone()) && !blockchain.block_exists(block.clone()) {
-                blockchain.execute_block(block.clone());
-                info!("Executed block {:?}", block.id);
-                // Progress the epoch
-            } else if blockchain.block_exists(block.clone()) {
-                info!("Block {:?} already exists", block.id);
+            if blockchain.verify_block(block.clone()) {
+                if !blockchain.block_exists(block.clone()) {
+                    blockchain.execute_block(block.clone());
+                    info!("Executed block {:?}", block.id);
+                    // Progress the epoch once when executing a new block
+                    blockchain.epoch.progress();
+                }
+
+                // NEW: Ensure every node signs if it hasn't already
+                {
+                    let local_pub = blockchain.wallet.get_public_key().to_string();
+                    // Check if this node already signed the block
+                    let already_signed = blockchain
+                        .pending_signatures
+                        .get(&block.id)
+                        .map(|sigs| sigs.iter().any(|s| s.sender.address == local_pub))
+                        .unwrap_or(false);
+                    if !already_signed {
+                        let block_hash_hex = hex::encode(&block.hash);
+                        let signature = blockchain.wallet.sign_message(block_hash_hex.as_bytes());
+                        let block_sig = BlockSignature {
+                            block_id: block.id,
+                            block_hash: block_hash_hex,
+                            sender: Account { address: local_pub },
+                            signature: signature.to_vec(),
+                        };
+                        let json = serde_json::to_string(&block_sig).unwrap();
+                        self.gossipsub
+                            .publish(BLOCK_SIGNATURE_TOPIC.clone(), json.into_bytes())
+                            .unwrap();
+                    }
+                }
+            } else {
+                info!("Block failed verification from {:?}", source);
             }
-            blockchain.epoch.progress();
 
             // Check if it is the end of the epoch
             if blockchain.epoch.is_end_of_epoch() {
                 blockchain.end_of_epoch();
             }
         }
-        // Try deserializing as HashChainCom
+        // Receive a HashChainCom - Commitment for the epoch
         else if let Ok(msg) = serde_json::from_slice::<HashChainCom>(data) {
-            // info!("Received a hash chain message from {:?}", msg.sender);
             Validator::update_validator_com(
                 &mut blockchain.validator,
                 Account {
@@ -219,9 +264,10 @@ impl AppBehaviour {
                 },
                 msg.clone(),
             );
-            // received commitment
             info!("Receivedrom {:?}", msg.hash_chain_index);
-        } else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(data) {
+        }
+        // Receive a HashChainMessage - HashChainMessage is the message that contains the hash of the hash chain
+        else if let Ok(msg) = serde_json::from_slice::<HashChainMessage>(data) {
             let validator_commitment = blockchain
                 .validator
                 .get_validator_commitment(msg.sender.clone());
@@ -244,6 +290,15 @@ impl AppBehaviour {
                 );
                 error!("Received commitment: {}", received_commitment);
             }
+        }
+        // NEW: Process BlockSignature messages - only relevant for the block producer
+        else if let Ok(block_sig) = serde_json::from_slice::<BlockSignature>(data) {
+            info!(
+                "Received block signature for block {} from {:?}",
+                block_sig.block_id, source
+            );
+            // Let the blockchain (if this node is the block producer) collect the signature
+            blockchain.collect_block_signature(block_sig);
         } else {
             info!("Received an unknown message from {:?}: {:?}", source, data);
         }

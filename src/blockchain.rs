@@ -1,15 +1,21 @@
 use crate::accounts::{Account, State};
 use crate::block::Block;
+use crate::ccok::{Builder as CertBuilder, Certificate, Params, Participant};
 #[allow(unused_imports)]
 use crate::config::EPOCH_DURATION;
 use crate::epoch::Epoch;
 use crate::hashchain::{verify_hash_chain_index, HashChain};
 use crate::mempool::Mempool;
+use crate::merkle::MerkleTreeBuilder;
+use crate::p2p::BlockSignature;
 use crate::transaction::{Transaction, TransactionType};
 use crate::utils::{get_block_seed, select_block_proposer, Seed};
 use crate::validator::Validator;
 use crate::wallet::Wallet;
+use hex;
 use log::{error, info, warn};
+use std::collections::HashMap;
+use std::convert::TryInto;
 
 pub struct Blockchain {
     pub chain: Vec<Block>,
@@ -20,6 +26,8 @@ pub struct Blockchain {
     pub epoch: Epoch,
     pub buffer: Buffer,
     pub hash_chain: HashChain,
+    pub pending_signatures: HashMap<usize, Vec<BlockSignature>>,
+    pub last_certificate: Option<(usize, Certificate)>,
 }
 
 pub struct Buffer {
@@ -52,6 +60,8 @@ impl Blockchain {
             epoch: Epoch::new(),
             buffer: Buffer::new(),
             hash_chain: HashChain { hash_chain: vec![] },
+            pending_signatures: HashMap::new(),
+            last_certificate: None,
         };
         let wallet = &mut blockchain.wallet;
         let account = Account {
@@ -140,9 +150,37 @@ impl Blockchain {
         txns: Vec<Transaction>,
         seed: Seed,
     ) -> Block {
-        // If the chain is empty, we need to create the first block
-        if self.chain.is_empty() {
-            let block = Block::new(
+        // Check if the last certificate corresponds to the immediate previous block.
+        let cert_to_attach = if let Some((cert_block_id, cert)) = self.last_certificate.take() {
+            let last_block_id = self.chain.last().map(|b| b.id).unwrap_or(0);
+            if cert_block_id == last_block_id {
+                info!("Proposing block with certificate computed for previous block: {}", cert_block_id);
+                Some(cert)
+            } else {
+                info!(
+                    "Ignoring certificate computed for block {} (previous block is {})",
+                    cert_block_id, last_block_id
+                );
+                None
+            }
+        } else {
+            info!("Proposing block without certificate");
+            None
+        };
+
+        self.propose_block_with_certificate(proposer_hash, proposer_address, txns, seed, cert_to_attach)
+    }
+
+    pub fn propose_block_with_certificate(
+        &mut self,
+        proposer_hash: String,
+        proposer_address: Account,
+        txns: Vec<Transaction>,
+        seed: Seed,
+        certificate: Option<Certificate>,
+    ) -> Block {
+        let block = if self.chain.is_empty() {
+            Block::new(
                 1,
                 [0; 32],
                 self.epoch.timestamp as usize,
@@ -150,12 +188,12 @@ impl Blockchain {
                 proposer_address,
                 proposer_hash,
                 seed,
+                certificate,
             )
-            .unwrap();
-            block
+            .unwrap()
         } else {
             let latest_block = self.chain.last().unwrap();
-            let block = Block::new(
+            Block::new(
                 latest_block.id + 1,
                 latest_block.hash,
                 latest_block.timestamp,
@@ -163,10 +201,23 @@ impl Blockchain {
                 proposer_address,
                 proposer_hash,
                 seed,
+                certificate,
             )
-            .unwrap();
-            block
-        }
+            .unwrap()
+        };
+
+        let block_hash_str = hex::encode(&block.hash);
+        let local_pub = self.wallet.get_public_key().to_string();
+        let signature = self.wallet.sign_message(block_hash_str.as_bytes());
+        let block_sig = crate::p2p::BlockSignature {
+            block_id: block.id,
+            block_hash: block_hash_str, // The signed message is now the block hash.
+            sender: crate::accounts::Account { address: local_pub },
+            signature: signature.to_vec(),
+        };
+        self.collect_block_signature(block_sig);
+
+        block
     }
 
     pub fn verify_block(&mut self, block: Block) -> bool {
@@ -177,7 +228,7 @@ impl Blockchain {
         if block.previous_hash != previous_block.hash {
             error!("Previous block hash does not match");
         } else {
-            info!("[SUCCESS] Previous block hash matches");
+            info!("✅ Previous block hash matches");
         }
 
         let proposer_address = block.proposer_address;
@@ -236,6 +287,82 @@ impl Blockchain {
             },
             amount,
         );
+    }
+
+    pub fn collect_block_signature(&mut self, block_sig: BlockSignature) {
+        let expected = self.validator.state.accounts.len();
+        let (should_build, block_id, block_hash) = {
+            let sigs = self
+                .pending_signatures
+                .entry(block_sig.block_id)
+                .or_insert(vec![]);
+            let sender_address = block_sig.sender.address.clone();
+            if !sigs.iter().any(|s| s.sender.address == sender_address) {
+                sigs.push(block_sig);
+            }
+            let should_build = sigs.len() >= expected;
+            let block_id = sigs[0].block_id;
+            let block_hash = sigs[0].block_hash.clone();
+            (should_build, block_id, block_hash)
+        };
+
+        if should_build {
+            let mut params = Params {
+                msg: block_hash.as_bytes().to_vec(),
+                proven_weight: 0,
+                security_param: 128,
+            };
+            // Compute proven_weight while building participants.
+            let participants: Vec<Participant> = self
+                .validator
+                .state
+                .accounts
+                .iter()
+                .map(|a| {
+                    let weight =
+                        self.validator.state.balances.get(a).cloned().unwrap_or(0.0) as u64;
+                    params.proven_weight += weight;
+                    Participant {
+                        public_key: a.address.clone(),
+                        weight,
+                    }
+                })
+                .collect();
+
+            let collected_sigs = self
+                .pending_signatures
+                .remove(&block_id)
+                .unwrap_or_else(Vec::new);
+            // Build the party tree from participants as in the test.
+            let mut tree = MerkleTreeBuilder::new();
+            tree.build(&participants)
+                .expect("Failed to build Merkle tree");
+            let party_tree_root = tree.root();
+            let mut builder = CertBuilder::new(params, participants.clone(), party_tree_root);
+            // For each collected block signature, add the signature to the builder.
+            for sig in collected_sigs {
+                if let Some(idx) = participants
+                    .iter()
+                    .position(|p| p.public_key == sig.sender.address)
+                {
+                    let fixed_sig: [u8; 2420] = sig
+                        .signature
+                        .try_into()
+                        .expect("Signature length does not match expected size");
+                    let _ = builder.add_signature(idx, fixed_sig);
+                }
+            }
+            let certificate = match builder.build() {
+                Ok(cert) => cert,
+                Err(e) => {
+                    error!("Error building certificate: {}", e);
+                    return;
+                }
+            };
+
+            info!("🔐 Certificate computed for block {}: {:?}", block_id, certificate.proof_size());
+            self.last_certificate = Some((block_id, certificate));
+        }
     }
 }
 

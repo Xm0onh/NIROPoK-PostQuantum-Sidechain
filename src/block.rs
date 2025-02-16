@@ -1,9 +1,11 @@
 use crate::accounts::Account;
+use crate::ccok::Certificate;
 use crate::transaction::Transaction;
 use crate::utils::Seed;
 use rs_merkle::{Hasher, MerkleTree};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
+
 #[derive(Clone)]
 #[allow(dead_code)]
 struct Sha3Hasher;
@@ -27,6 +29,7 @@ pub struct Block {
     pub proposer_address: Account,
     pub proposer_hash: String,
     pub seed: Seed,
+    pub certificate: Option<Certificate>,
 }
 
 impl Block {
@@ -38,6 +41,7 @@ impl Block {
         proposer_address: Account,
         proposer_hash: String,
         seed: Seed,
+        certificate: Option<Certificate>,
     ) -> Result<Self, String> {
         let mut block = Self {
             id,
@@ -48,6 +52,7 @@ impl Block {
             proposer_address,
             proposer_hash,
             seed,
+            certificate,
         };
         block.hash = block.compute_merkle_root();
         Ok(block)

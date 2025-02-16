@@ -23,7 +23,9 @@ impl Validator {
     pub fn add_validator(&mut self, account: Account, txn: Transaction) -> Result<bool, String> {
         self.state.add_account(account.clone());
         if txn.txn_type == TransactionType::STAKE && txn.amount >= STAKING_AMOUNT {
-            self.state.stake(account, txn.amount);
+            self.state.stake(account.clone(), txn.amount);
+            self.state.balances.insert(account.clone(), txn.amount);
+            // self.state.accounts.push(account.clone());
         }
         Ok(true)
     }
