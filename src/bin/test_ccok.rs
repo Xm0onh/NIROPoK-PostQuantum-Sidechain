@@ -10,7 +10,7 @@ fn main() {
     let mut rng = rand::thread_rng();
 
     // Number of participants (increased to simulate paper's scale)
-    let num_participants = 1000;
+    let num_participants = 5000;
     let mut total_weight: u64 = 0;
 
     // Create participants and wallets
@@ -31,9 +31,8 @@ fn main() {
             weight,
         });
         wallets.push(wallet);
-        println!("Participant {} created with weight {}", i, weight);
     }
-
+    println!("Participants created");
     // Define message to sign
     let msg = b"Threshold signature test message".to_vec();
 

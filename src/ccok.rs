@@ -177,8 +177,10 @@ impl Builder {
         let mut party_tree = MerkleTreeBuilder::new();
         party_tree.build(&self.participants)?;
 
-        // Calculate number of reveals based on security parameter
-        let num_reveals = (self.params.security_param as f64).ceil() as usize;
+        // Calculate the fraction of weight not required for the proof
+        let fraction = 1.0 - (self.params.proven_weight as f64 / self.signed_weight as f64);
+        // K is a tuning constant (here chosen as 0.5) to adjust the number of reveals
+        let num_reveals = std::cmp::max(1, ((self.params.security_param as f64) * fraction * 0.5).ceil() as usize);
 
         // Instead of collecting unsorted reveals, collect reveal information as (position, coin_index)
         let mut reveal_map = HashMap::new();
@@ -391,7 +393,7 @@ impl Certificate {
             party_tree_root,
             &self.party_proofs,
             &sorted_party_positions,
-            participants.len(),
+            self.total_sigs,
             &sorted_party_leaves,
         ) {
             println!("Participant Merkle proof verification failed");
