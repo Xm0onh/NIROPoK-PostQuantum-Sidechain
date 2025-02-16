@@ -38,7 +38,10 @@ fn main() {
 
     // We'll simulate a scenario where only 80% of totalWeight is signed
     let target_signed_weight = (total_weight as f64 * 0.8).round() as u64;
-    println!("Total weight: {}. Target signed weight (80%% of total): {}", total_weight, target_signed_weight);
+    println!(
+        "Total weight: {}. Target signed weight (80%% of total): {}",
+        total_weight, target_signed_weight
+    );
 
     // Define provenWeight percentages as fractions of totalWeight (10%, 30%, 50%, 70%)
     let proven_ratios = vec![0.10, 0.30, 0.50, 0.70];
@@ -49,11 +52,17 @@ fn main() {
     // Iterate over different provenWeight percentages
     for ratio in proven_ratios {
         let proven_weight = (total_weight as f64 * ratio).round() as u64;
-        println!("\n===== Experiment with provenWeight = {}%% of total (i.e., {}) =====", ratio * 100.0, proven_weight);
+        println!(
+            "\n===== Experiment with provenWeight = {}%% of total (i.e., {}) =====",
+            ratio * 100.0,
+            proven_weight
+        );
 
         // Build party tree from participants
         let mut party_tree = MerkleTreeBuilder::new();
-        party_tree.build(&participants).expect("Failed to build party tree");
+        party_tree
+            .build(&participants)
+            .expect("Failed to build party tree");
         let party_tree_root = party_tree.root();
 
         // Create parameters with the current provenWeight and constant security parameter
@@ -67,7 +76,10 @@ fn main() {
         let mut builder = Builder::new(params, participants.clone(), party_tree_root.clone());
 
         // Each participant signs the message until we reach the target signed weight (80% of totalWeight)
-        println!("Collecting signatures until cumulative weight reaches {}...", target_signed_weight);
+        println!(
+            "Collecting signatures until cumulative weight reaches {}...",
+            target_signed_weight
+        );
         let mut signed_count = 0;
         for (i, wallet) in wallets.iter().enumerate() {
             if builder.signed_weight < target_signed_weight {
@@ -77,10 +89,17 @@ fn main() {
                 }
             }
         }
-        println!("Collected signatures from {} participants; final cumulative signed weight: {}", signed_count, builder.signed_weight);
+        println!(
+            "Collected signatures from {} participants; final cumulative signed weight: {}",
+            signed_count, builder.signed_weight
+        );
 
         // Build the certificate
-        println!("Building certificate for provenWeight {} ({}%% of total)...", proven_weight, ratio * 100.0);
+        println!(
+            "Building certificate for provenWeight {} ({}%% of total)...",
+            proven_weight,
+            ratio * 100.0
+        );
         let cert = match builder.build() {
             Ok(cert) => cert,
             Err(e) => {
@@ -88,7 +107,10 @@ fn main() {
                 continue;
             }
         };
-        println!("Certificate built successfully. Signed weight: {}", cert.signed_weight);
+        println!(
+            "Certificate built successfully. Signed weight: {}",
+            cert.signed_weight
+        );
 
         // Verify the certificate
         println!("Verifying certificate...");
@@ -99,7 +121,10 @@ fn main() {
         }
 
         // Output the number of reveals and proof sizes
-        println!("Number of reveals in certificate: {}", cert.reveal_positions.len());
+        println!(
+            "Number of reveals in certificate: {}",
+            cert.reveal_positions.len()
+        );
         let (sig_size, party_size) = cert.proof_size();
         println!("Signature proof size: {} bytes", sig_size);
         println!("Party proof size: {} bytes", party_size);

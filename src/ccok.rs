@@ -180,12 +180,15 @@ impl Builder {
         // Calculate the fraction of weight not required for the proof
         let fraction = 1.0 - (self.params.proven_weight as f64 / self.signed_weight as f64);
         // K is a tuning constant (here chosen as 0.5) to adjust the number of reveals
-        let num_reveals = std::cmp::max(1, ((self.params.security_param as f64) * fraction * 0.5).ceil() as usize);
+        let num_reveals = std::cmp::max(
+            1,
+            ((self.params.security_param as f64) * fraction * 0.5).ceil() as usize,
+        );
 
         // Instead of collecting unsorted reveals, collect reveal information as (position, coin_index)
         let mut reveal_map = HashMap::new();
         let mut reveal_info: Vec<(usize, u64)> = Vec::new();
-        
+
         // Choose positions to reveal using coin flips
         for i in 0..num_reveals {
             let choice = self.coin_choice(i as u64, &sig_tree.root());
@@ -202,11 +205,12 @@ impl Builder {
                 reveal_info.push((pos, i as u64));
             }
         }
-        
+
         // Sort reveal_info by position
         reveal_info.sort_by_key(|(pos, _)| *pos);
         let sorted_positions: Vec<usize> = reveal_info.iter().map(|(pos, _)| *pos).collect();
-        let sorted_coin_indices: Vec<u64> = reveal_info.iter().map(|(_, coin_idx)| *coin_idx).collect();
+        let sorted_coin_indices: Vec<u64> =
+            reveal_info.iter().map(|(_, coin_idx)| *coin_idx).collect();
 
         // Generate proofs for both signatures and participants using sorted positions
         let sig_proofs = sig_tree.prove(&sorted_positions);
@@ -351,12 +355,16 @@ impl Certificate {
         println!("Built signature Merkle tree");
 
         // Prepare sorted (position, leaf_hash) pairs for signature leaves
-        let mut sig_pairs: Vec<(usize, [u8; 32])> = positions.iter().cloned().zip(
-            sig_slots.iter().map(|slot| {
-                let bytes = bincode::serialize(slot).map_err(|e| format!("Serialization error: {}", e)).unwrap();
+        let mut sig_pairs: Vec<(usize, [u8; 32])> = positions
+            .iter()
+            .cloned()
+            .zip(sig_slots.iter().map(|slot| {
+                let bytes = bincode::serialize(slot)
+                    .map_err(|e| format!("Serialization error: {}", e))
+                    .unwrap();
                 <CustomHasher as Hasher>::hash(&bytes)
-            })
-        ).collect();
+            }))
+            .collect();
         sig_pairs.sort_by_key(|(pos, _)| *pos);
         let sorted_sig_positions: Vec<usize> = sig_pairs.iter().map(|(p, _)| *p).collect();
         let sorted_sig_leaves: Vec<[u8; 32]> = sig_pairs.iter().map(|(_, hash)| *hash).collect();
@@ -379,15 +387,20 @@ impl Certificate {
         println!("Built participant Merkle tree");
 
         // Prepare sorted (position, leaf_hash) pairs for participant leaves
-        let mut party_pairs: Vec<(usize, [u8; 32])> = positions.iter().cloned().zip(
-            participants.iter().map(|party| {
-                let bytes = bincode::serialize(party).map_err(|e| format!("Serialization error: {}", e)).unwrap();
+        let mut party_pairs: Vec<(usize, [u8; 32])> = positions
+            .iter()
+            .cloned()
+            .zip(participants.iter().map(|party| {
+                let bytes = bincode::serialize(party)
+                    .map_err(|e| format!("Serialization error: {}", e))
+                    .unwrap();
                 <CustomHasher as Hasher>::hash(&bytes)
-            })
-        ).collect();
+            }))
+            .collect();
         party_pairs.sort_by_key(|(pos, _)| *pos);
         let sorted_party_positions: Vec<usize> = party_pairs.iter().map(|(p, _)| *p).collect();
-        let sorted_party_leaves: Vec<[u8; 32]> = party_pairs.iter().map(|(_, hash)| *hash).collect();
+        let sorted_party_leaves: Vec<[u8; 32]> =
+            party_pairs.iter().map(|(_, hash)| *hash).collect();
 
         if !MerkleTreeBuilder::verify(
             party_tree_root,

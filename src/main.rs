@@ -19,11 +19,13 @@ use tokio::{
 mod accounts;
 mod block;
 mod blockchain;
+mod ccok;
 mod config;
 mod epoch;
 mod genesis;
 mod hashchain;
 mod mempool;
+mod merkle;
 mod p2p;
 mod transaction;
 mod utils;
