@@ -1,4 +1,5 @@
 use expander_compiler::frontend::*;
+use internal::Serde;
 
 // Import the SHA3 crate (we may use it externally)
 use sha3::{Digest, Sha3_256};
@@ -10,7 +11,9 @@ fn compute_sha3_hash(value: u64) -> u64 {
     let mut hasher = Sha3_256::new();
     hasher.update(&value.to_be_bytes());
     let result = hasher.finalize();
-    let bytes: [u8; 8] = result[0..8].try_into().expect("slice with incorrect length");
+    let bytes: [u8; 8] = result[0..8]
+        .try_into()
+        .expect("slice with incorrect length");
     u64::from_be_bytes(bytes)
 }
 
@@ -83,10 +86,10 @@ fn main() {
     let r_s_val: u32 = 456;
     let sk_s_val: u32 = 789;
     let simulated_hashed_seed = seed_a_val.wrapping_add(42); // 123 + 42 = 165
-    let pk_m_val = simulated_hashed_seed.wrapping_add(1);      // 165 + 1 = 166
+    let pk_m_val = simulated_hashed_seed.wrapping_add(1); // 165 + 1 = 166
     let commitment_input_val = seed_a_val.wrapping_add(r_s_val); // 123 + 456 = 579
-    let c_a_val = commitment_input_val.wrapping_add(42);         // 579 + 42 = 621
-    let pk_s_val = sk_s_val.wrapping_add(1);                    // 789 + 1 = 790
+    let c_a_val = commitment_input_val.wrapping_add(42); // 579 + 42 = 621
+    let pk_s_val = sk_s_val.wrapping_add(1); // 789 + 1 = 790
 
     let assignment = PQZKCircuit::<GF2> {
         seed_a: GF2::from(seed_a_val),
@@ -101,6 +104,28 @@ fn main() {
         .witness_solver
         .solve_witness(&assignment)
         .unwrap();
-    let run_result = compile_result.layered_circuit.run(&witness);
-    println!("run_result: {:?}", run_result);
+    let output = compile_result.layered_circuit.run(&witness);
+    assert_eq!(output, vec![true]);
+
+    let file = std::fs::File::create("circuit.txt").unwrap();
+    let writer = std::io::BufWriter::new(file);
+
+    compile_result
+        .layered_circuit
+        .serialize_into(writer)
+        .unwrap();
+
+    // Serialize and write the witness to a file
+    let file = std::fs::File::create("witness.txt").unwrap();
+    let writer = std::io::BufWriter::new(file);
+    witness.serialize_into(writer).unwrap();
+
+    // Serialize and write the witness solver to a file
+    let file = std::fs::File::create("witness_solver.txt").unwrap();
+    let writer = std::io::BufWriter::new(file);
+    compile_result
+        .witness_solver
+        .serialize_into(writer)
+        .unwrap();
+
 }
