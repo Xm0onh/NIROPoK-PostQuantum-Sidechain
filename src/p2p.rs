@@ -57,7 +57,7 @@ pub enum EventType {
 }
 
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "P2PEvent")]
+#[behaviour(to_swarm = "P2PEvent")]
 pub struct AppBehaviour {
     pub gossipsub: Behaviour,
     pub mdns: Mdns,
