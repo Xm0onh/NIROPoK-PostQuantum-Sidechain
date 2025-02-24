@@ -15,6 +15,7 @@ use tokio::{
     sync::mpsc,
     time::sleep,
 };
+use warp::Filter;
 
 mod accounts;
 mod block;
@@ -48,6 +49,7 @@ async fn main() {
     let (epoch_sender, mut epoch_rcv) = mpsc::unbounded_channel::<bool>();
     let (mining_sender, mut mining_rcv) = mpsc::unbounded_channel::<bool>();
     let (genesis_sender, mut genesis_rcv) = mpsc::unbounded_channel::<bool>();
+    let (rpc_sender, mut rpc_rcv) = mpsc::unbounded_channel::<Transaction>();
 
     let wallet = wallet::Wallet::new().unwrap();
     let blockchain = Arc::new(Mutex::new(Blockchain::new(wallet)));
@@ -104,27 +106,49 @@ async fn main() {
         );
     });
 
+    // Spawn RPC server to receive transactions via HTTP POST requests
+    let rpc_sender_clone = rpc_sender.clone();
+    tokio::spawn(async move {
+        let rpc_route = warp::post()
+            .and(warp::path("rpc"))
+            .and(warp::path("transaction"))
+            .and(warp::body::json())
+            .and_then(move |txn: Transaction| {
+                let rpc_sender = rpc_sender_clone.clone();
+                async move {
+                    rpc_sender.send(txn).expect("Failed to send RPC transaction");
+                    Ok::<_, warp::Rejection>(warp::reply::json(&serde_json::json!({"status": "ok"})))
+                }
+            });
+        let (addr, server) = warp::serve(rpc_route)
+            .try_bind_ephemeral(([127, 0, 0, 1], 0))
+            .expect("Failed to bind ephemeral RPC port");
+        info!("RPC server running on {}", addr);
+        server.await;
+    });
+
     loop {
         let evt = {
             select! {
-            line = stdin.next_line() => Some(p2p::EventType::Command(line.expect("can get line").expect("can read line from stdin"))),
-            _epoch = epoch_rcv.recv() => Some(p2p::EventType::Epoch),
-            _mining = mining_rcv.recv() => Some(p2p::EventType::Mining),
-            _genesis = genesis_rcv.recv() => Some(p2p::EventType::Genesis),
-            event = swarm.select_next_some() => {
-                match event {
-                    SwarmEvent::Behaviour(e) => {
-                        let behaviour = swarm.behaviour_mut();
-                        behaviour.handle_event(e, Arc::clone(&blockchain));
-                        None
+                line = stdin.next_line() => Some(p2p::EventType::Command(line.expect("can get line").expect("can read line from stdin"))),
+                _epoch = epoch_rcv.recv() => Some(p2p::EventType::Epoch),
+                _mining = mining_rcv.recv() => Some(p2p::EventType::Mining),
+                _genesis = genesis_rcv.recv() => Some(p2p::EventType::Genesis),
+                rpc = rpc_rcv.recv() => rpc.map(|txn| p2p::EventType::RpcTransaction(txn)),
+                event = swarm.select_next_some() => {
+                    match event {
+                        SwarmEvent::Behaviour(e) => {
+                            let behaviour = swarm.behaviour_mut();
+                            behaviour.handle_event(e, Arc::clone(&blockchain));
+                            None
+                        }
+                        SwarmEvent::NewListenAddr { address, .. } => {
+                            info!("Listening on {:?}", address);
+                            None
+                        }
+                        _ => None
                     }
-                    SwarmEvent::NewListenAddr { address, .. } => {
-                        info!("Listening on {:?}", address);
-                        None
-                    }
-                    _ => None
-                    }
-                },
+                }
             }
         };
 
@@ -223,6 +247,17 @@ async fn main() {
                         epoch_sender_clone
                             .send(true)
                             .expect("can't send epoch event");
+                    }
+                }
+
+                EventType::RpcTransaction(txn) => {
+                    info!("Received RPC transaction: {:?}", txn);
+                    let mut blockchain_guard = blockchain.lock().unwrap();
+                    if txn.verify().unwrap() && !blockchain_guard.mempool.txn_exists(&txn.hash) {
+                        blockchain_guard.mempool.add_transaction(txn.clone());
+                        let json = serde_json::to_string(&txn).expect("Failed to serialize RPC transaction");
+                        swarm.behaviour_mut().gossipsub.publish(p2p::TRANSACTION_TOPIC.clone(), json.into_bytes()).unwrap();
+                        info!("RPC transaction processed and relayed: {:?}", txn.hash);
                     }
                 }
 

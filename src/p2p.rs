@@ -54,6 +54,7 @@ pub enum EventType {
     Epoch,
     Mining,
     HashChain,
+    RpcTransaction(Transaction),
 }
 
 #[derive(NetworkBehaviour)]
