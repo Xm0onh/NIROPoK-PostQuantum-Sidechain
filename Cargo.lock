@@ -1739,6 +1739,7 @@ dependencies = [
 [[package]]
 name = "expander_compiler"
 version = "0.1.0"
+source = "git+https://github.com/PolyhedraZK/ExpanderCompilerCollection?branch=master#d36255a4fbd8fee94cf85847d7b868ecf18b17ef"
 dependencies = [
  "arith",
  "ark-std",

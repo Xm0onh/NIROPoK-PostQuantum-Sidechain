@@ -26,7 +26,3 @@ This project utilizes a hash chain to ensure fairness and unpredictability in bl
 4. **Verification Process:**  
    As epochs progress, parts of the hash chain are revealed, allowing nodes to verify that the selection process aligns with the initial commitment.  
    This mechanism ensures that the randomness and fairness in the block production process are maintained across the peer-to-peer network.
-
-## Dependencies - Temporary until upstream fixes the issues with branches
-- [ExpanderCompilerCollection](https://github.com/PolyhedraZK/Expander) - Description of what this dependency does
-
