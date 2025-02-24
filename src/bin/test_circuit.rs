@@ -127,5 +127,4 @@ fn main() {
         .witness_solver
         .serialize_into(writer)
         .unwrap();
-
 }

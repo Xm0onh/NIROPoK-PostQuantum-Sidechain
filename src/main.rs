@@ -15,7 +15,6 @@ use tokio::{
     sync::mpsc,
     time::sleep,
 };
-use warp::Filter;
 
 mod accounts;
 mod block;
@@ -27,6 +26,7 @@ mod genesis;
 mod hashchain;
 mod mempool;
 mod merkle;
+mod networking;
 mod p2p;
 mod transaction;
 mod utils;
@@ -42,6 +42,7 @@ use hashchain::HashChainCom;
 use log::info;
 use transaction::{Transaction, TransactionType};
 use utils::Seed;
+
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
@@ -109,22 +110,7 @@ async fn main() {
     // Spawn RPC server to receive transactions via HTTP POST requests
     let rpc_sender_clone = rpc_sender.clone();
     tokio::spawn(async move {
-        let rpc_route = warp::post()
-            .and(warp::path("rpc"))
-            .and(warp::path("transaction"))
-            .and(warp::body::json())
-            .and_then(move |txn: Transaction| {
-                let rpc_sender = rpc_sender_clone.clone();
-                async move {
-                    rpc_sender.send(txn).expect("Failed to send RPC transaction");
-                    Ok::<_, warp::Rejection>(warp::reply::json(&serde_json::json!({"status": "ok"})))
-                }
-            });
-        let (addr, server) = warp::serve(rpc_route)
-            .try_bind_ephemeral(([127, 0, 0, 1], 0))
-            .expect("Failed to bind ephemeral RPC port");
-        info!("RPC server running on {}", addr);
-        server.await;
+        networking::start_rpc_server(rpc_sender_clone).await;
     });
 
     loop {
@@ -255,8 +241,13 @@ async fn main() {
                     let mut blockchain_guard = blockchain.lock().unwrap();
                     if txn.verify().unwrap() && !blockchain_guard.mempool.txn_exists(&txn.hash) {
                         blockchain_guard.mempool.add_transaction(txn.clone());
-                        let json = serde_json::to_string(&txn).expect("Failed to serialize RPC transaction");
-                        swarm.behaviour_mut().gossipsub.publish(p2p::TRANSACTION_TOPIC.clone(), json.into_bytes()).unwrap();
+                        let json = serde_json::to_string(&txn)
+                            .expect("Failed to serialize RPC transaction");
+                        swarm
+                            .behaviour_mut()
+                            .gossipsub
+                            .publish(p2p::TRANSACTION_TOPIC.clone(), json.into_bytes())
+                            .unwrap();
                         info!("RPC transaction processed and relayed: {:?}", txn.hash);
                     }
                 }

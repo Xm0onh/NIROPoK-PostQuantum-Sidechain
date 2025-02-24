@@ -154,7 +154,10 @@ impl Blockchain {
         let cert_to_attach = if let Some((cert_block_id, cert)) = self.last_certificate.take() {
             let last_block_id = self.chain.last().map(|b| b.id).unwrap_or(0);
             if cert_block_id == last_block_id {
-                info!("Proposing block with certificate computed for previous block: {}", cert_block_id);
+                info!(
+                    "Proposing block with certificate computed for previous block: {}",
+                    cert_block_id
+                );
                 Some(cert)
             } else {
                 info!(
@@ -168,7 +171,13 @@ impl Blockchain {
             None
         };
 
-        self.propose_block_with_certificate(proposer_hash, proposer_address, txns, seed, cert_to_attach)
+        self.propose_block_with_certificate(
+            proposer_hash,
+            proposer_address,
+            txns,
+            seed,
+            cert_to_attach,
+        )
     }
 
     pub fn propose_block_with_certificate(
@@ -360,7 +369,11 @@ impl Blockchain {
                 }
             };
 
-            info!("🔐 Certificate computed for block {}: {:?}", block_id, certificate.proof_size());
+            info!(
+                "🔐 Certificate computed for block {}: {:?}",
+                block_id,
+                certificate.proof_size()
+            );
             self.last_certificate = Some((block_id, certificate));
         }
     }
