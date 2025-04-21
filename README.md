@@ -52,3 +52,11 @@ expander-exec verify \
   --witness-file   witness.txt \
   --input-proof-file proof.bin
 ```
+
+## Benchmarking the verification time:
+```
+hyperfine --warmup 3 'expander-exec verify \
+  --circuit-file circuit.txt \
+  --witness-file witness.txt \
+  --input-proof-file proof.bin'
+```
