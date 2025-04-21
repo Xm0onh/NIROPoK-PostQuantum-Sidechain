@@ -26,3 +26,29 @@ This project utilizes a hash chain to ensure fairness and unpredictability in bl
 4. **Verification Process:**  
    As epochs progress, parts of the hash chain are revealed, allowing nodes to verify that the selection process aligns with the initial commitment.  
    This mechanism ensures that the randomness and fairness in the block production process are maintained across the peer-to-peer network.
+
+## Generate Circuit
+```
+cargo run --bin circuits
+```
+
+## Generate Proof
+
+```
+expander-exec \
+  --fiat-shamir-hash SHA256 \
+  --poly-commitment-scheme Raw \
+  prove \
+    --circuit-file   circuit.txt \
+    --witness-file   witness.txt \
+    --output-proof-file proof.bin
+```
+
+
+## Verify
+```
+expander-exec verify \
+  --circuit-file   circuit.txt \
+  --witness-file   witness.txt \
+  --input-proof-file proof.bin
+```
