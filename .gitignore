@@ -2,3 +2,8 @@
 /src/Note
 
 .DS_Store
+
+proof.bin
+witness.txt
+witness_solver.txt
+circuit.txt
