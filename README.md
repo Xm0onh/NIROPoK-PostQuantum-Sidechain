@@ -32,6 +32,8 @@ This project utilizes a hash chain to ensure fairness and unpredictability in bl
 cargo run --bin circuits
 ```
 
+stat -f"%z bytes" proof.bin
+
 ## Generate Proof
 
 ```

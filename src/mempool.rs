@@ -29,6 +29,14 @@ impl Mempool {
         self.transactions.iter().any(|t| t.hash == *hash)
     }
 
+    /// Retrieves up to `limit` transactions from the mempool and removes them.
+    pub fn get_transactions(&mut self, limit: usize) -> Vec<Transaction> {
+        // Determine how many transactions to take (up to the limit or the total available)
+        let count = std::cmp::min(limit, self.transactions.len());
+        // Drain the transactions from the end of the vector (can also take from the start if preferred)
+        self.transactions.split_off(self.transactions.len() - count)
+    }
+
     #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.transactions.clear();

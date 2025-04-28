@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Send the transaction to the RPC endpoint
     // Note: The port number will be shown in the node's logs when it starts
-    let rpc_url = "http://127.0.0.1:50749/rpc/transaction";
+    let rpc_url = "http://127.0.0.1:55544/rpc/transaction";
 
     let client = reqwest::Client::new();
     let response = client

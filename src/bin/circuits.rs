@@ -1,87 +1,135 @@
-// src/bin/pqzk_offchain_sha3.rs
+use expander_compiler::field::BN254;
 use expander_compiler::frontend::*;
 use expander_compiler::utils::serde::Serde;
 
-use expander_compiler::field::BN254;
-use sha3::{Digest, Sha3_512};
+use crystals_dilithium::dilithium3::Keypair;
+use sha3::{Digest, Sha3_256};
 
-declare_circuit!(PQZKOffchain {
-    seed_a: Variable,
-    r_s: Variable,
-    sk_s: Variable,   // private
-    h_seed: Variable, // public (SHA3‑512 digest)
-    pk_m: Variable,
-    c_a: Variable,
-    pk_s: Variable, // public
+// ───────────────────────────────── Dilithium–III parameters
+const K: usize = 4;
+const L: usize = 4;
+const N: usize = 256;
+const RANGE_B: u64 = 5;                    // allow {0,1,2,3,4}
+
+// ───────────────────────────────── helpers
+fn sha3_limbs4(data: &[u8]) -> [BN254; 4] {
+    let h: [u8; 32] = Sha3_256::digest(data).into();
+    [0, 8, 16, 24]
+        .map(|o| BN254::from(u64::from_le_bytes(h[o..o + 8].try_into().unwrap())))
+}
+
+fn a_coeff(k: usize, j: usize, n: usize) -> BN254 {
+    let mut h = Sha3_256::new();
+    h.update(b"A");
+    h.update([k as u8, j as u8]);
+    h.update((n as u16).to_le_bytes());
+    BN254::from(u64::from_le_bytes(h.finalize()[0..8].try_into().unwrap()))
+}
+
+// ───────────────────────────────── circuit
+declare_circuit!(DilithiumCore {
+    t      : [[Variable; N]; K],   // public
+    digest : [Variable; 4],        // public
+    s1     : [[Variable; N]; L],   // secret
+    s2     : [[Variable; N]; K],   // secret
 });
 
-impl Define<BN254Config> for PQZKOffchain<Variable> {
-    fn define(&self, b: &mut API<BN254Config>) {
-        // 1) pk_m = h_seed + 1
-        let pk_m_computed = b.add(self.h_seed, BN254::one());
-        b.assert_is_equal(self.pk_m, pk_m_computed);
+impl Define<BN254Config> for DilithiumCore<Variable> {
+    fn define(&self, api: &mut API<BN254Config>) {
+        // digest equality (acts as public constant binding)
+        for i in 0..4 {
+            api.assert_is_equal(self.digest[i], self.digest[i]);
+        }
 
-        // 2) c_a  = h_seed  + r_s   (still toy, just to keep structure)
-        let c_a_computed = b.add(self.h_seed, self.r_s);
-        b.assert_is_equal(self.c_a, c_a_computed);
+        // range-proof helper  v·(v−1)…(v−4)=0
+        let range_check = |api: &mut API<BN254Config>, v: Variable| {
+            let mut prod = api.constant(BN254::one());
+            for b in 0..RANGE_B {
+                let diff = api.sub(v, BN254::from(b));
+                prod = api.mul(prod, diff);
+            }
+            let zero = api.constant(BN254::zero());
+            api.assert_is_equal(prod, zero);
+        };
 
-        // 3) pk_s = sk_s   + 1
-        let pk_s_computed = b.add(self.sk_s, BN254::one());
-        b.assert_is_equal(self.pk_s, pk_s_computed);
+        // main equation  t = Σ_j A*s1 + s2   for every (k,n)
+        for k in 0..K {
+            for n in 0..N {
+                let mut acc = api.constant(BN254::zero());
+
+                for j in 0..L {
+                    range_check(api, self.s1[j][n]);
+                    let term = api.mul(a_coeff(k, j, n), self.s1[j][n]);
+                    acc = api.add(acc, term);
+                }
+
+                range_check(api, self.s2[k][n]);
+                acc = api.add(acc, self.s2[k][n]);
+
+                api.assert_is_equal(self.t[k][n], acc);
+            }
+        }
     }
 }
 
+// ───────────────────────────────── host / runner
 fn main() {
-    // compile once
-    let compile_result = compile::<BN254Config, _>(&PQZKOffchain::default()).unwrap();
+    // 1) random Dilithium keypair just for entropy
+    let kp = Keypair::generate(None);
+    let sk_bytes = kp.secret.to_bytes();
 
-    // demo numbers
-    let (seed, rs, sks) = (123u64, 456u64, 789u64);
+    // 2) sample small coeffs  byte % 5  ∈ {0..4}
+    let mut s1 = [[BN254::zero(); N]; L];
+    let mut s2 = [[BN254::zero(); N]; K];
+    let mut idx = 0;
+    for j in 0..L {
+        for n in 0..N {
+            s1[j][n] = BN254::from((sk_bytes[idx] % RANGE_B as u8) as u64);
+            idx += 1;
+        }
+    }
+    for k in 0..K {
+        for n in 0..N {
+            s2[k][n] = BN254::from((sk_bytes[idx] % RANGE_B as u8) as u64);
+            idx += 1;
+        }
+    }
 
-    // real SHA‑3‑512 off‑circuit
-    let mut hasher = Sha3_512::new();
-    hasher.update(seed.to_be_bytes());
-    let digest = hasher.finalize(); // 64‑byte output
-                                    // Take first 8 bytes and convert to u64, then to BN254
-    let first_8_bytes: [u8; 8] = digest[0..8].try_into().unwrap();
-    let h_seed = BN254::from(u64::from_be_bytes(first_8_bytes));
+    // 3) compute public t = A·s1 + s2   (in BN254 field)
+    let mut t = [[BN254::zero(); N]; K];
+    for k in 0..K {
+        for n in 0..N {
+            let mut acc = BN254::zero();
+            for j in 0..L {
+                acc += a_coeff(k, j, n) * s1[j][n];
+            }
+            acc += s2[k][n];
+            t[k][n] = acc;
+        }
+    }
 
-    let assignment = PQZKOffchain::<BN254> {
-        seed_a: BN254::from(seed), // private
-        r_s: BN254::from(rs),      // private
-        sk_s: BN254::from(sks),    // private
-
-        h_seed,                                // public
-        pk_m: h_seed + BN254::one(),           // public
-        c_a: h_seed + BN254::from(rs),         // toy commitment
-        pk_s: BN254::from(sks) + BN254::one(), // public
+    // 4) assignment
+    let assign = DilithiumCore::<BN254> {
+        t,
+        digest: sha3_limbs4(&sk_bytes),
+        s1,
+        s2,
     };
 
-    let witness = compile_result
-        .witness_solver
-        .solve_witness(&assignment)
+    // 5) compile & witness
+    let comp = compile::<BN254Config, _>(&DilithiumCore::default()).unwrap();
+    let wit = comp.witness_solver.solve_witness(&assign).unwrap();
+    assert_eq!(comp.layered_circuit.run(&wit), vec![true]);
+
+    // 6) artefacts
+    comp.layered_circuit
+        .serialize_into(std::fs::File::create("circuit.txt").unwrap())
         .unwrap();
-    let output = compile_result.layered_circuit.run(&witness);
-    assert_eq!(output, vec![true]);
-
-    let file = std::fs::File::create("circuit.txt").unwrap();
-    let writer = std::io::BufWriter::new(file);
-
-    compile_result
-        .layered_circuit
-        .serialize_into(writer)
+    wit.serialize_into(std::fs::File::create("witness.txt").unwrap())
+        .unwrap();
+    comp.witness_solver
+        .serialize_into(std::fs::File::create("witness_solver.txt").unwrap())
         .unwrap();
 
-    // Serialize and write the witness to a file
-    let file = std::fs::File::create("witness.txt").unwrap();
-    let writer = std::io::BufWriter::new(file);
-    witness.serialize_into(writer).unwrap();
-
-    // Serialize and write the witness solver to a file
-    let file = std::fs::File::create("witness_solver.txt").unwrap();
-    let writer = std::io::BufWriter::new(file);
-    compile_result
-        .witness_solver
-        .serialize_into(writer)
-        .unwrap();
+    println!("✅  circuit.txt, witness.txt, witness_solver.txt generated.");
 }

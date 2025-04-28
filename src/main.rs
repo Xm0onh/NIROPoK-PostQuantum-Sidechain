@@ -7,13 +7,13 @@ use libp2p::{
 use p2p::EventType;
 use std::{
     sync::{Arc, Mutex},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{
     io::{stdin, AsyncBufReadExt, BufReader},
     select, spawn,
     sync::mpsc,
-    time::sleep,
+    time::{sleep, interval},
 };
 
 mod accounts;
@@ -42,6 +42,7 @@ use hashchain::HashChainCom;
 use log::info;
 use transaction::{Transaction, TransactionType};
 use utils::Seed;
+use crate::utils::TpsTracker;
 
 #[tokio::main]
 async fn main() {
@@ -54,6 +55,13 @@ async fn main() {
 
     let wallet = wallet::Wallet::new().unwrap();
     let blockchain = Arc::new(Mutex::new(Blockchain::new(wallet)));
+
+    // --- Initialize TPS Tracker ---
+    let tps_tracker = Arc::new(Mutex::new(TpsTracker {
+        start_time: Instant::now(),
+        total_transactions_confirmed: 0,
+    }));
+    // --- End Initialize TPS Tracker ---
 
     let behavior = p2p::AppBehaviour::new().await;
     let transport =
@@ -113,6 +121,25 @@ async fn main() {
         networking::start_rpc_server(rpc_sender_clone).await;
     });
 
+    // --- Add this block for TPS reporting ---
+    let tps_tracker_clone_reporter = Arc::clone(&tps_tracker);
+    tokio::spawn(async move {
+        let mut report_interval = interval(Duration::from_secs(10)); // Report every 10 seconds
+        loop {
+            report_interval.tick().await;
+            let tracker = tps_tracker_clone_reporter.lock().unwrap();
+            let elapsed = tracker.start_time.elapsed().as_secs_f64();
+            if elapsed > 0.0 {
+                let tps = tracker.total_transactions_confirmed as f64 / elapsed;
+                info!(
+                    "[{:.2}s elapsed] Total Confirmed Txns: {}, Average TPS: {:.2}",
+                    elapsed, tracker.total_transactions_confirmed, tps
+                );
+            }
+        }
+    });
+    // --- End TPS reporting block ---
+
     loop {
         let evt = {
             select! {
@@ -125,7 +152,7 @@ async fn main() {
                     match event {
                         SwarmEvent::Behaviour(e) => {
                             let behaviour = swarm.behaviour_mut();
-                            behaviour.handle_event(e, Arc::clone(&blockchain));
+                            behaviour.handle_event(e, Arc::clone(&blockchain), Arc::clone(&tps_tracker));
                             None
                         }
                         SwarmEvent::NewListenAddr { address, .. } => {
@@ -216,23 +243,32 @@ async fn main() {
                     }
                     info!("mining event");
 
-                    let mut blockchain = blockchain.lock().unwrap();
-                    info!("Epoch: {}", blockchain.epoch.timestamp);
+                    let mut blockchain_guard = blockchain.lock().unwrap();
+                    info!("Epoch: {}", blockchain_guard.epoch.timestamp);
 
-                    if blockchain.epoch.timestamp == 1 {
-                        let new_epoch = blockchain.new_epoch();
-                        handle_block_proposal(&mut blockchain, new_epoch, &mut swarm);
-                    } else if (blockchain.epoch.timestamp % EPOCH_DURATION) != 0 {
-                        let next_seed = blockchain.get_next_seed();
-                        handle_block_proposal(&mut blockchain, next_seed, &mut swarm);
-                    } else if blockchain.epoch.is_end_of_epoch() || blockchain.epoch.timestamp == 0
+                    let next_seed: Option<Seed>;
+
+                    if blockchain_guard.epoch.timestamp == 1 {
+                        next_seed = Some(blockchain_guard.new_epoch());
+                    } else if (blockchain_guard.epoch.timestamp % EPOCH_DURATION) != 0 {
+                        next_seed = Some(blockchain_guard.get_next_seed());
+                    } else if blockchain_guard.epoch.is_end_of_epoch() || blockchain_guard.epoch.timestamp == 0
                     {
                         info!("End of Epoch");
-                        blockchain.end_of_epoch();
+                        blockchain_guard.end_of_epoch();
                         let epoch_sender_clone = epoch_sender.clone();
                         epoch_sender_clone
                             .send(true)
                             .expect("can't send epoch event");
+                        next_seed = None;
+                    } else {
+                         next_seed = None;
+                         log::warn!("Unexpected state in mining event loop");
+                    }
+
+                    if let Some(seed) = next_seed {
+                        let tps_tracker_clone_miner = Arc::clone(&tps_tracker);
+                        handle_block_proposal(&mut blockchain_guard, seed, &mut swarm, tps_tracker_clone_miner);
                     }
                 }
 
@@ -261,6 +297,7 @@ async fn main() {
         blockchain: &mut Blockchain,
         seed: Seed,
         swarm: &mut libp2p::Swarm<p2p::AppBehaviour>,
+        tps_tracker: Arc<Mutex<TpsTracker>>,
     ) {
         let proposer = blockchain.select_block_proposer(seed);
         if proposer.address == blockchain.wallet.get_public_key().to_string() {
@@ -272,22 +309,30 @@ async fn main() {
                 )
                 .bright_green()
             );
-            // Pull the hash chain index for the new block
             let hash_chain_index = blockchain.hash_chain.get_hash(
                 EPOCH_DURATION as usize - blockchain.epoch.timestamp as usize + 1,
                 proposer.clone(),
             );
-            let txns = vec![];
-            // Propose the new block
+            // --- Fetch Transactions from Mempool ---
+            let txns_to_include = blockchain.mempool.get_transactions(MAX_TXNS_PER_BLOCK);
+            // --- End Fetch Transactions ---
             let my_address = Account {
                 address: blockchain.wallet.get_public_key().to_string(),
             };
-            let new_block =
-                blockchain.propose_block(hash_chain_index.hash_chain_index, my_address, txns, seed);
-            // Execute the new block
+            let new_block = blockchain.propose_block(
+                hash_chain_index.hash_chain_index,
+                my_address,
+                txns_to_include,
+                seed);
+            let confirmed_txns_count = new_block.txn.len() as u64;
             blockchain.execute_block(new_block.clone());
+
+            if confirmed_txns_count > 0 {
+                let mut tracker = tps_tracker.lock().unwrap();
+                tracker.total_transactions_confirmed += confirmed_txns_count;
+            }
+
             blockchain.epoch.progress();
-            // Broadcast the new block
             let json = serde_json::to_string(&new_block).expect("Failed to serialize block");
             swarm
                 .behaviour_mut()

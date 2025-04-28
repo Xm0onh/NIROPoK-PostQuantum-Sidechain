@@ -2,6 +2,15 @@ use crate::accounts::Account;
 use crate::validator::Validator;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
+use std::time::Instant;
+
+// --- TPS Tracker Struct ---
+#[derive(Debug)]
+pub struct TpsTracker {
+    pub start_time: Instant,
+    pub total_transactions_confirmed: u64,
+}
+// --- End TPS Tracker Struct ---
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Seed {

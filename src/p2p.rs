@@ -5,6 +5,7 @@ use crate::genesis::Genesis;
 use crate::hashchain::{verify_hash_chain_index, HashChainCom, HashChainMessage};
 use crate::transaction::Transaction;
 use crate::validator::Validator;
+use crate::utils::TpsTracker;
 use libp2p::{
     gossipsub::{
         Behaviour, ConfigBuilder, Event, IdentTopic as Topic, MessageAuthenticity, PeerScoreParams,
@@ -142,14 +143,14 @@ impl AppBehaviour {
             .unwrap();
         behaviour
     }
-    pub fn handle_event(&mut self, event: P2PEvent, blockchain: Arc<Mutex<Blockchain>>) {
+    pub fn handle_event(&mut self, event: P2PEvent, blockchain: Arc<Mutex<Blockchain>>, tps_tracker: Arc<Mutex<TpsTracker>>) {
         match event {
-            P2PEvent::Gossipsub(event) => self.handle_gossipsub_event(event, blockchain),
+            P2PEvent::Gossipsub(event) => self.handle_gossipsub_event(event, blockchain, tps_tracker),
             P2PEvent::Mdns(event) => self.handle_mdns_event(event),
         }
     }
 
-    fn handle_gossipsub_event(&mut self, event: Event, blockchain: Arc<Mutex<Blockchain>>) {
+    fn handle_gossipsub_event(&mut self, event: Event, blockchain: Arc<Mutex<Blockchain>>, tps_tracker: Arc<Mutex<TpsTracker>>) {
         match event {
             Event::Message {
                 propagation_source,
@@ -158,13 +159,13 @@ impl AppBehaviour {
             } => {
                 let data = &message.data;
                 let source = message.source.unwrap_or(propagation_source);
-                self.process_message(data, source, blockchain);
+                self.process_message(data, source, blockchain, tps_tracker);
             }
             _ => {}
         }
     }
 
-    fn process_message(&mut self, data: &[u8], source: PeerId, blockchain: Arc<Mutex<Blockchain>>) {
+    fn process_message(&mut self, data: &[u8], source: PeerId, blockchain: Arc<Mutex<Blockchain>>, tps_tracker: Arc<Mutex<TpsTracker>>) {
         let mut blockchain = blockchain.lock().unwrap();
 
         if let Ok(genesis) = bincode::deserialize::<Genesis>(data) {
@@ -221,6 +222,18 @@ impl AppBehaviour {
                     info!("Executed block {:?}", block.id);
                     // Progress the epoch once when executing a new block
                     blockchain.epoch.progress();
+
+                    // --- Add Txns to TPS Counter --- 
+                    let confirmed_txns_count = block.txn.len() as u64;
+                    if confirmed_txns_count > 0 {
+                        let mut tracker = tps_tracker.lock().unwrap();
+                        tracker.total_transactions_confirmed += confirmed_txns_count;
+                        info!(
+                            "Added {} txns from received block {:?} to TPS count. Total: {}", 
+                            confirmed_txns_count, block.id, tracker.total_transactions_confirmed
+                        );
+                    }
+                    // --- End TPS Counter Update ---
                 }
 
                 // NEW: Ensure every node signs if it hasn't already
